@@ -1,0 +1,19 @@
+# Binaries
+cosign
+
+# Test binary
+*.test
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# CSV exports
+*.csv
+
+# Temporary files
+tmp/
+temp/
+
+.claude

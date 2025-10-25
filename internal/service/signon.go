@@ -1,0 +1,168 @@
+package service
+
+import (
+	"regexp"
+	"strings"
+	"time"
+)
+
+// SignonStore interface for data operations
+type SignonStore interface {
+	Insert(name, email, location string, createdAt int64) (int64, error)
+	GetByID(id int64) (*Signon, error)
+	List(limit, offset int) ([]*Signon, error)
+	Count() (int, error)
+	Delete(id int64) error
+	EmailExists(email string) (bool, error)
+}
+
+var signonStore SignonStore
+
+// SetSignonStore sets the signon store implementation
+func SetSignonStore(s SignonStore) {
+	signonStore = s
+}
+
+// Email validation regex
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+// CreateSignon creates a new sign-on entry with validation
+func CreateSignon(name, email, location string, allowDuplicates bool) (*Signon, error) {
+	if signonStore == nil {
+		return nil, ErrNoSignonStore
+	}
+
+	// Validate inputs
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(email)
+	location = strings.TrimSpace(location)
+
+	if name == "" {
+		return nil, ErrEmptyName
+	}
+	if email == "" {
+		return nil, ErrEmptyEmail
+	}
+	if location == "" {
+		return nil, ErrEmptyLocation
+	}
+
+	// Validate email format
+	if !emailRegex.MatchString(email) {
+		return nil, ErrInvalidEmail
+	}
+
+	// Check for duplicate email if not allowed
+	if !allowDuplicates {
+		exists, err := signonStore.EmailExists(email)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrDuplicateEmail
+		}
+	}
+
+	// Validate location against configured options
+	if err := validateLocation(location); err != nil {
+		return nil, err
+	}
+
+	// Insert
+	createdAt := time.Now().Unix()
+	id, err := signonStore.Insert(name, email, location, createdAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Signon{
+		ID:        id,
+		Name:      name,
+		Email:     email,
+		Location:  location,
+		CreatedAt: createdAt,
+	}, nil
+}
+
+// GetSignon retrieves a sign-on by ID
+func GetSignon(id int64) (*Signon, error) {
+	if signonStore == nil {
+		return nil, ErrNoSignonStore
+	}
+	return signonStore.GetByID(id)
+}
+
+// ListSignons retrieves all sign-ons with pagination
+func ListSignons(limit, offset int) ([]*Signon, error) {
+	if signonStore == nil {
+		return nil, ErrNoSignonStore
+	}
+
+	// Default pagination
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	return signonStore.List(limit, offset)
+}
+
+// CountSignons returns the total number of sign-ons
+func CountSignons() (int, error) {
+	if signonStore == nil {
+		return 0, ErrNoSignonStore
+	}
+	return signonStore.Count()
+}
+
+// DeleteSignon removes a sign-on by ID
+func DeleteSignon(id int64) error {
+	if signonStore == nil {
+		return ErrNoSignonStore
+	}
+	return signonStore.Delete(id)
+}
+
+// validateLocation checks if the location is valid based on current configuration
+func validateLocation(location string) error {
+	if locationConfigStore == nil {
+		// If no location config store, allow any location
+		return nil
+	}
+
+	config, err := locationConfigStore.GetConfig()
+	if err != nil {
+		// If config doesn't exist yet, allow any location
+		if err == ErrLocationConfigNotFound {
+			return nil
+		}
+		return err
+	}
+
+	// If custom text is allowed, any location is valid
+	if config.AllowCustomText {
+		return nil
+	}
+
+	// Otherwise, location must be in the preset options
+	options, err := locationConfigStore.GetOptions()
+	if err != nil {
+		return err
+	}
+
+	// If no options configured, allow any location
+	if len(options) == 0 {
+		return nil
+	}
+
+	// Check if location matches one of the options
+	for _, opt := range options {
+		if opt.Value == location {
+			return nil
+		}
+	}
+
+	return ErrLocationNotInOptions
+}
