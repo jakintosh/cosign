@@ -1,6 +1,7 @@
-package api
+package api_test
 
 import (
+	"cosign/internal/api"
 	"cosign/internal/database"
 	"cosign/internal/service"
 	"encoding/json"
@@ -60,7 +61,7 @@ func setupServices(t *testing.T) {
 // setupRouter builds a fresh router for testing
 func setupRouter() *mux.Router {
 	router := mux.NewRouter()
-	BuildRouter(router.PathPrefix("/api/v1").Subrouter())
+	api.BuildRouter(router.PathPrefix("/api/v1").Subrouter())
 	return router
 }
 

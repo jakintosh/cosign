@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"net/http"
@@ -13,18 +13,18 @@ func TestListAPIKeysSuccess(t *testing.T) {
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/admin/keys", &resp, authHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
 
 	// Should have a keys array (might be empty or have the test key)
-	keys, ok := data["keys"].([]interface{})
+	keys, ok := data["keys"].([]any)
 	if !ok {
 		t.Fatalf("Expected keys field to be an array, got %T", data["keys"])
 	}
@@ -42,7 +42,7 @@ func TestListAPIKeysNoAuth(t *testing.T) {
 
 	router := setupRouter()
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/admin/keys", &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
@@ -57,12 +57,12 @@ func TestCreateAPIKeySuccess(t *testing.T) {
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{}`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/keys", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusCreated, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
@@ -94,12 +94,12 @@ func TestCreateAPIKeyWithCustomID(t *testing.T) {
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"id": "my-custom-key"}`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/keys", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusCreated, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
@@ -126,7 +126,7 @@ func TestCreateAPIKeyInvalidJSON(t *testing.T) {
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{invalid json`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/keys", body, &resp, authHeader)
 
 	// According to the implementation, invalid JSON for ID is treated as empty ID
@@ -142,7 +142,7 @@ func TestCreateAPIKeyNoAuth(t *testing.T) {
 	router := setupRouter()
 
 	body := `{}`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/keys", body, &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
@@ -159,7 +159,7 @@ func TestDeleteAPIKeySuccess(t *testing.T) {
 
 	// First create a key
 	createBody := `{"id": "key-to-delete"}`
-	var createResp map[string]interface{}
+	var createResp map[string]any
 	post(router, "/api/v1/admin/keys", createBody, &createResp, authHeader)
 
 	// Delete the key
@@ -168,15 +168,15 @@ func TestDeleteAPIKeySuccess(t *testing.T) {
 	expectStatus(t, http.StatusNoContent, result)
 
 	// Verify it's deleted by trying to list and checking it's not there
-	var listResp map[string]interface{}
+	var listResp map[string]any
 	get(router, "/api/v1/admin/keys", &listResp, authHeader)
 
-	data, _ := listResp["data"].(map[string]interface{})
-	keys, _ := data["keys"].([]interface{})
+	data, _ := listResp["data"].(map[string]any)
+	keys, _ := data["keys"].([]any)
 
 	// Find the deleted key
 	for _, k := range keys {
-		keyData, ok := k.(map[string]interface{})
+		keyData, ok := k.(map[string]any)
 		if ok {
 			if id, ok := keyData["id"].(string); ok && id == "key-to-delete" {
 				t.Errorf("Expected key to be deleted, but found it in list")

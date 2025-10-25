@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"fmt"
@@ -15,18 +15,18 @@ func TestGetLocationConfigSuccess(t *testing.T) {
 
 	router := setupRouter()
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
 	result := get(router, "/api/v1/location-config", &resp, corsHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
 
-	config, ok := data["config"].(map[string]interface{})
+	config, ok := data["config"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected config field to be a map, got %T", data["config"])
 	}
@@ -49,7 +49,7 @@ func TestGetLocationConfigCORSForbidden(t *testing.T) {
 
 	router := setupRouter()
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	corsHeader := header{"Origin", "http://disallowed-origin"}
 	result := get(router, "/api/v1/location-config", &resp, corsHeader)
 
@@ -66,17 +66,17 @@ func TestGetLocationConfigAdminSuccess(t *testing.T) {
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/admin/location-config", &resp, authHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
 
-	config, ok := data["config"].(map[string]interface{})
+	config, ok := data["config"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected config field to be a map, got %T", data["config"])
 	}
@@ -93,7 +93,7 @@ func TestGetLocationConfigAdminNoAuth(t *testing.T) {
 
 	router := setupRouter()
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/admin/location-config", &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
@@ -162,19 +162,19 @@ func TestListLocationOptionsSuccess(t *testing.T) {
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/admin/location-config/options", &resp, authHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
 
 	// Handle both nil and empty array cases
-	var options []interface{}
-	if o, ok := data["options"].([]interface{}); ok {
+	var options []any
+	if o, ok := data["options"].([]any); ok {
 		options = o
 	}
 
@@ -191,7 +191,7 @@ func TestListLocationOptionsNoAuth(t *testing.T) {
 
 	router := setupRouter()
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/admin/location-config/options", &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
@@ -206,12 +206,12 @@ func TestAddLocationOptionSuccess(t *testing.T) {
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"value": "New York", "display_order": 1}`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/location-config/options", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusCreated, result)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
@@ -230,7 +230,7 @@ func TestAddLocationOptionEmptyValue(t *testing.T) {
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"value": "", "display_order": 1}`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/location-config/options", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
@@ -245,7 +245,7 @@ func TestAddLocationOptionInvalidJSON(t *testing.T) {
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{invalid json`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/location-config/options", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
@@ -259,7 +259,7 @@ func TestAddLocationOptionNoAuth(t *testing.T) {
 	router := setupRouter()
 
 	body := `{"value": "New York", "display_order": 1}`
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := post(router, "/api/v1/admin/location-config/options", body, &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
@@ -276,10 +276,10 @@ func TestUpdateLocationOptionSuccess(t *testing.T) {
 
 	// First add an option
 	addBody := `{"value": "New York", "display_order": 1}`
-	var addResp map[string]interface{}
+	var addResp map[string]any
 	post(router, "/api/v1/admin/location-config/options", addBody, &addResp, authHeader)
 
-	addData, _ := addResp["data"].(map[string]interface{})
+	addData, _ := addResp["data"].(map[string]any)
 	optionID := formatID(addData["id"])
 
 	// Update the option
@@ -328,10 +328,10 @@ func TestUpdateLocationOptionEmptyValue(t *testing.T) {
 
 	// First add an option
 	addBody := `{"value": "New York", "display_order": 1}`
-	var addResp map[string]interface{}
+	var addResp map[string]any
 	post(router, "/api/v1/admin/location-config/options", addBody, &addResp, authHeader)
 
-	addData, _ := addResp["data"].(map[string]interface{})
+	addData, _ := addResp["data"].(map[string]any)
 	optionID := formatID(addData["id"])
 
 	// Try to update with empty value
@@ -379,10 +379,10 @@ func TestDeleteLocationOptionSuccess(t *testing.T) {
 
 	// First add an option
 	addBody := `{"value": "New York", "display_order": 1}`
-	var addResp map[string]interface{}
+	var addResp map[string]any
 	post(router, "/api/v1/admin/location-config/options", addBody, &addResp, authHeader)
 
-	addData, _ := addResp["data"].(map[string]interface{})
+	addData, _ := addResp["data"].(map[string]any)
 	optionID := formatID(addData["id"])
 
 	// Delete the option

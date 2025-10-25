@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ func TestHealthCheckSuccess(t *testing.T) {
 
 	router := setupRouter()
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	result := get(router, "/api/v1/health", &resp)
 
 	expectStatus(t, http.StatusOK, result)
@@ -20,7 +20,7 @@ func TestHealthCheckSuccess(t *testing.T) {
 		t.Fatal("Expected response data, got nil")
 	}
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	if !ok {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
