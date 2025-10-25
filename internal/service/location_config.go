@@ -1,5 +1,17 @@
 package service
 
+// LocationConfig holds the location field configuration
+type LocationConfig struct {
+	AllowCustomText bool `json:"allow_custom_text"`
+}
+
+// LocationOption represents a preset location option
+type LocationOption struct {
+	ID           int64  `json:"id"`
+	Value        string `json:"value"`
+	DisplayOrder int    `json:"display_order"`
+}
+
 // LocationConfigStore interface for location configuration operations
 type LocationConfigStore interface {
 	GetConfig() (*LocationConfig, error)

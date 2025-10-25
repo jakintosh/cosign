@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+// Signon represents a public letter sign-on
+type Signon struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Location  string `json:"location"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 // SignonStore interface for data operations
 type SignonStore interface {
 	Insert(name, email, location string, createdAt int64) (int64, error)
@@ -27,7 +36,12 @@ func SetSignonStore(s SignonStore) {
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 // CreateSignon creates a new sign-on entry with validation
-func CreateSignon(name, email, location string, allowDuplicates bool) (*Signon, error) {
+func CreateSignon(
+	name string,
+	email string,
+	location string,
+	allowDuplicates bool,
+) (*Signon, error) {
 	if signonStore == nil {
 		return nil, ErrNoSignonStore
 	}

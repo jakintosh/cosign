@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+// APIKey represents an API key for authentication
+type APIKey struct {
+	ID        string `json:"id"`
+	Hash      []byte `json:"-"`
+	Salt      []byte `json:"-"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 // KeyStore interface for API key operations
 type KeyStore interface {
 	Insert(id string, hash, salt []byte, createdAt int64) error
