@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"cosign/internal/api"
-	"cosign/internal/database"
 	"cosign/internal/service"
 	"encoding/json"
 	"fmt"
@@ -25,37 +24,8 @@ type header struct {
 	value string
 }
 
-// setupTestDB initializes an in-memory SQLite database for testing
-func setupTestDB(t *testing.T) {
-	err := database.Init(":memory:", false)
-	if err != nil {
-		t.Fatalf("Failed to initialize test database: %v", err)
-	}
-}
-
-// setupServices initializes all service stores with the database
-func setupServices(t *testing.T) {
-	// Set up all store implementations
-	service.SetSignonStore(database.NewSignonStore())
-	service.SetLocationConfigStore(database.NewLocationConfigStore())
-	service.SetKeyStore(database.NewKeyStore())
-	service.SetCORSStore(database.NewCORSStore())
-
-	// Add a test CORS origin
-	err := service.AddCORSOrigin("http://test-origin")
-	if err != nil {
-		t.Fatalf("Failed to add test CORS origin: %v", err)
-	}
-
-	// Create a test API key
-	testKey, err := service.CreateAPIKey("test-key")
-	if err != nil {
-		t.Fatalf("Failed to create test API key: %v", err)
-	}
-
-	// Store the test key for use in tests
-	// We can recreate it from the pattern: it will be "test-key.{secret}"
-	_ = testKey // The actual key is stored in the database
+func setupCORS() {
+	service.SetAllowedOrigins([]service.AllowedOrigin{{URL: "http://test-default"}})
 }
 
 // setupRouter builds a fresh router for testing
@@ -67,11 +37,12 @@ func setupRouter() *mux.Router {
 
 // makeTestAuthHeader creates a valid authorization header for admin endpoints
 func makeTestAuthHeader(t *testing.T) header {
-	token, err := service.CreateAPIKey("")
+	token, err := service.CreateAPIKey()
 	if err != nil {
-		t.Fatalf("Failed to create test API key: %v", err)
+		t.Fatal(err)
 	}
-	return header{"Authorization", "Bearer " + token}
+	auth := header{"Authorization", "Bearer " + token}
+	return auth
 }
 
 // expectStatus validates that the HTTP result has the expected status code

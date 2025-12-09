@@ -3,7 +3,6 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	_ "modernc.org/sqlite"
 )
@@ -19,7 +18,7 @@ var migrations = []migration{
 	{
 		version: 1,
 		sql: `
-			CREATE TABLE signons (
+			CREATE TABLE IF NOT EXISTS signons (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				name TEXT NOT NULL,
 				email TEXT NOT NULL,
@@ -33,7 +32,7 @@ var migrations = []migration{
 	{
 		version: 2,
 		sql: `
-			CREATE TABLE location_config (
+			CREATE TABLE IF NOT EXISTS location_config (
 				id INTEGER PRIMARY KEY CHECK (id = 1),
 				allow_custom_text INTEGER NOT NULL DEFAULT 1
 			);
@@ -43,7 +42,7 @@ var migrations = []migration{
 	{
 		version: 3,
 		sql: `
-			CREATE TABLE location_options (
+			CREATE TABLE IF NOT EXISTS location_options (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				value TEXT NOT NULL UNIQUE,
 				display_order INTEGER NOT NULL
@@ -54,20 +53,20 @@ var migrations = []migration{
 	{
 		version: 4,
 		sql: `
-			CREATE TABLE api_keys (
-				id TEXT PRIMARY KEY,
-				hash BLOB NOT NULL,
-				salt BLOB NOT NULL,
-				created_at INTEGER NOT NULL
+			CREATE TABLE IF NOT EXISTS api_key (
+				id TEXT NOT NULL PRIMARY KEY,
+				salt TEXT NOT NULL,
+				hash TEXT NOT NULL,
+				created INTEGER,
+				last_used INTEGER
 			);
 		`,
 	},
 	{
 		version: 5,
 		sql: `
-			CREATE TABLE cors_origins (
-				origin TEXT PRIMARY KEY,
-				created_at INTEGER NOT NULL
+			CREATE TABLE IF NOT EXISTS allowed_origin (
+				url TEXT NOT NULL PRIMARY KEY
 			);
 		`,
 	},
@@ -103,7 +102,7 @@ func Init(dbPath string, useWAL bool) error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	log.Printf("Database initialized at %s", dbPath)
+	// log.Printf("Database initialized at %s", dbPath)
 	return nil
 }
 
@@ -111,7 +110,7 @@ func runMigrations() error {
 	current := getSchemaVersion()
 	for _, m := range migrations {
 		if m.version > current {
-			log.Printf("Running migration %d...", m.version)
+			// log.Printf("Running migration %d...", m.version)
 			if _, err := db.Exec(m.sql); err != nil {
 				return fmt.Errorf("migration %d failed: %w", m.version, err)
 			}

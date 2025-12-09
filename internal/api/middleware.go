@@ -11,7 +11,7 @@ import (
 
 // Rate limiter map: key is IP address
 var (
-	rateLimiters = make(map[string]*rate.Limiter)
+	rateLimiters   = make(map[string]*rate.Limiter)
 	rateLimitersMu sync.Mutex
 )
 
@@ -81,7 +81,7 @@ func withCORS(next http.HandlerFunc) http.HandlerFunc {
 		origin := r.Header.Get("Origin")
 
 		// Check if origin is allowed
-		allowed, err := service.IsOriginAllowed(origin)
+		allowed, err := service.IsAllowedOrigin(origin)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "Failed to verify origin")
 			return

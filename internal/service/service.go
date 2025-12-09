@@ -1,13 +1,17 @@
 package service
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Errors
 var (
-	ErrNoSignonStore          = errors.New("signon store not configured")
-	ErrNoLocationConfigStore  = errors.New("location config store not configured")
-	ErrNoKeyStore             = errors.New("key store not configured")
-	ErrNoCORSStore            = errors.New("cors store not configured")
+	ErrNoSignonStore         = errors.New("signon store not configured")
+	ErrNoLocationConfigStore = errors.New("location config store not configured")
+	ErrNoKeyStore            = errors.New("key store not configured")
+	ErrNoCORSStore           = errors.New("cors store not configured")
+
 	ErrSignonNotFound         = errors.New("signon not found")
 	ErrLocationConfigNotFound = errors.New("location config not found")
 	ErrLocationOptionNotFound = errors.New("location option not found")
@@ -24,3 +28,8 @@ var (
 	ErrUnauthorized           = errors.New("unauthorized")
 	ErrOriginNotAllowed       = errors.New("origin not allowed")
 )
+
+type DatabaseError struct{ Err error }
+
+func (e DatabaseError) Error() string { return fmt.Sprintf("database error: %v", e.Err) }
+func (e DatabaseError) Unwrap() error { return e.Err }

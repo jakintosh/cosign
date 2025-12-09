@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"cosign/internal/util"
 	"fmt"
 	"net/http"
 	"slices"
@@ -9,9 +10,8 @@ import (
 
 // TestListCORSOriginsSuccess tests listing CORS origins with valid authentication
 func TestListCORSOriginsSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -38,9 +38,8 @@ func TestListCORSOriginsSuccess(t *testing.T) {
 
 // TestListCORSOriginsNoAuth tests listing CORS origins without authentication
 func TestListCORSOriginsNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var resp map[string]any
@@ -51,9 +50,8 @@ func TestListCORSOriginsNoAuth(t *testing.T) {
 
 // TestAddCORSOriginSuccess tests adding a valid CORS origin
 func TestAddCORSOriginSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -85,9 +83,8 @@ func TestAddCORSOriginSuccess(t *testing.T) {
 
 // TestAddCORSOriginEmptyValue tests adding an empty CORS origin
 func TestAddCORSOriginEmptyValue(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -99,9 +96,8 @@ func TestAddCORSOriginEmptyValue(t *testing.T) {
 
 // TestAddCORSOriginInvalidJSON tests adding origin with invalid JSON
 func TestAddCORSOriginInvalidJSON(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -113,9 +109,8 @@ func TestAddCORSOriginInvalidJSON(t *testing.T) {
 
 // TestAddCORSOriginNoAuth tests adding CORS origin without authentication
 func TestAddCORSOriginNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{"origin": "https://example.com"}`
@@ -126,9 +121,8 @@ func TestAddCORSOriginNoAuth(t *testing.T) {
 
 // TestDeleteCORSOriginSuccess tests deleting a CORS origin
 func TestDeleteCORSOriginSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -161,10 +155,10 @@ func TestDeleteCORSOriginSuccess(t *testing.T) {
 
 // TestDeleteCORSOriginNotFound tests deleting a non-existent CORS origin
 func TestDeleteCORSOriginNotFound(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
+	setupCORS()
 
 	authHeader := makeTestAuthHeader(t)
 	result := del(router, "/api/v1/admin/cors/nonexistent-origin", nil, authHeader)
@@ -174,9 +168,8 @@ func TestDeleteCORSOriginNotFound(t *testing.T) {
 
 // TestDeleteCORSOriginNoAuth tests deleting a CORS origin without authentication
 func TestDeleteCORSOriginNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	result := del(router, "/api/v1/admin/cors/example-origin", nil)
@@ -186,9 +179,8 @@ func TestDeleteCORSOriginNoAuth(t *testing.T) {
 
 // TestAddAndListMultipleCORSOrigins tests adding and listing multiple origins
 func TestAddAndListMultipleCORSOrigins(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)

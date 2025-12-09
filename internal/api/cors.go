@@ -1,65 +1,86 @@
 package api
 
 import (
-	"cosign/internal/service"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
+	"cosign/internal/service"
 	"github.com/gorilla/mux"
 )
 
-type addCORSOriginRequest struct {
-	Origin string `json:"origin"`
+func buildAdminCORSRouter(
+	r *mux.Router,
+) {
+	r.HandleFunc("", withAuth(handleGetCORS)).Methods("GET")
+	r.HandleFunc("", withAuth(handlePostCORS)).Methods("POST")
+	r.HandleFunc("/{origin}", withAuth(handleDeleteCORS)).Methods("DELETE")
 }
 
-// buildAdminCORSRouter builds the admin CORS routes
-func buildAdminCORSRouter(r *mux.Router) {
-	r.HandleFunc("", withAuth(handleListCORSOrigins)).Methods("GET")
-	r.HandleFunc("", withAuth(handleAddCORSOrigin)).Methods("POST")
-	r.HandleFunc("/{origin}", withAuth(handleDeleteCORSOrigin)).Methods("DELETE")
-}
-
-func handleListCORSOrigins(w http.ResponseWriter, r *http.Request) {
-	origins, err := service.ListCORSOrigins()
+func handleGetCORS(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	origins, err := service.GetAllowedOrigins()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list CORS origins")
+		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
-
-	writeData(w, http.StatusOK, map[string]any{"origins": origins})
+	list := make([]string, 0, len(origins))
+	for _, o := range origins {
+		list = append(list, o.URL)
+	}
+	writeData(w, http.StatusOK, map[string]any{"origins": list})
 }
 
-func handleAddCORSOrigin(w http.ResponseWriter, r *http.Request) {
-	var req addCORSOriginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+func handlePostCORS(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	var payload struct {
+		Origin string `json:"origin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "Malformed JSON")
 		return
 	}
 
-	if err := service.AddCORSOrigin(req.Origin); err != nil {
-		if err == service.ErrOriginNotAllowed {
-			writeError(w, http.StatusBadRequest, err.Error())
+	origin := strings.TrimSpace(payload.Origin)
+	if origin == "" {
+		writeError(w, http.StatusBadRequest, "Origin is required")
+		return
+	}
+
+	if err := service.AddAllowedOrigin(origin); err != nil {
+		if errors.Is(err, service.ErrCORSOriginNotFound) {
+			writeError(w, http.StatusBadRequest, "Invalid Origin URL")
 		} else {
-			writeError(w, http.StatusInternalServerError, "Failed to add CORS origin")
+			writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		}
 		return
 	}
-
 	w.WriteHeader(http.StatusCreated)
 }
 
-func handleDeleteCORSOrigin(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	origin := vars["origin"]
-
-	if err := service.DeleteCORSOrigin(origin); err != nil {
-		if err == service.ErrCORSOriginNotFound {
-			writeError(w, http.StatusNotFound, err.Error())
-		} else {
-			writeError(w, http.StatusInternalServerError, "Failed to delete CORS origin")
-		}
+func handleDeleteCORS(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	origin := mux.Vars(r)["origin"]
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		writeError(w, http.StatusBadRequest, "Origin is required")
 		return
 	}
 
+	if err := service.DeleteAllowedOrigin(origin); err != nil {
+		if errors.Is(err, service.ErrCORSOriginNotFound) {
+			writeError(w, http.StatusNotFound, "Origin not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

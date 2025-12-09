@@ -4,20 +4,20 @@ import (
 	"fmt"
 	"strings"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var statusCmd = &cmd.Command{
+var statusCmd = &args.Command{
 	Name: "status",
 	Help: "show environment and server health",
-	Options: []cmd.Option{
+	Options: []args.Option{
 		{
 			Long: "verbose",
-			Type: cmd.OptionTypeFlag,
+			Type: args.OptionTypeFlag,
 			Help: "show detailed output",
 		},
 	},
-	Handler: func(i *cmd.Input) error {
+	Handler: func(i *args.Input) error {
 
 		env := "default"
 		if active, err := loadActiveEnv(i); err == nil && active != "" {

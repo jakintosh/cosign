@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	cmd "git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
 var signonsCmd = &cmd.Command{

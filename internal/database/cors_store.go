@@ -1,76 +1,90 @@
 package database
 
-import (
-	"cosign/internal/service"
-	"fmt"
-)
+import "cosign/internal/service"
 
-// DBCORSStore implements service.CORSStore
 type DBCORSStore struct{}
 
-// NewCORSStore returns a new CORSStore implementation
-func NewCORSStore() DBCORSStore {
-	return DBCORSStore{}
-}
+func NewCORSStore() DBCORSStore { return DBCORSStore{} }
 
-func (DBCORSStore) Add(origin string, createdAt int64) error {
-	_, err := db.Exec(
-		`INSERT INTO cors_origins (origin, created_at) VALUES (?1, ?2)
-		 ON CONFLICT(origin) DO UPDATE SET created_at = ?2`,
-		origin, createdAt,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to add cors origin: %w", err)
+func (DBCORSStore) CountOrigins() (
+	int,
+	error,
+) {
+	row := db.QueryRow(`
+		SELECT COUNT(*)
+		FROM allowed_origin;
+	`)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
 	}
-	return nil
+	return count, nil
 }
 
-func (DBCORSStore) List() ([]string, error) {
-	rows, err := db.Query(`SELECT origin FROM cors_origins ORDER BY origin ASC`)
+func (DBCORSStore) GetOrigins() (
+	[]service.AllowedOrigin,
+	error,
+) {
+	rows, err := db.Query(`
+		SELECT url
+		FROM allowed_origin
+		ORDER BY rowid;
+	`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list cors origins: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
-	var origins []string
+	var origins []service.AllowedOrigin
 	for rows.Next() {
-		var origin string
-		if err := rows.Scan(&origin); err != nil {
-			return nil, fmt.Errorf("failed to scan cors origin: %w", err)
+		var o service.AllowedOrigin
+		if err := rows.Scan(&o.URL); err != nil {
+			return nil, err
 		}
-		origins = append(origins, origin)
+		origins = append(origins, o)
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("row iteration error: %w", err)
-	}
-
 	return origins, nil
 }
 
-func (DBCORSStore) Delete(origin string) error {
-	result, err := db.Exec(`DELETE FROM cors_origins WHERE origin = ?1`, origin)
+func (DBCORSStore) SetOrigins(
+	origins []service.AllowedOrigin,
+) error {
+	tx, err := db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to delete cors origin: %w", err)
+		return err
 	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
-	rows, err := result.RowsAffected()
+	// delete existing urls
+	_, err = tx.Exec(`DELETE FROM allowed_origin;`)
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		tx.Rollback()
+		return err
 	}
 
-	if rows == 0 {
-		return service.ErrCORSOriginNotFound
-	}
-
-	return nil
-}
-
-func (DBCORSStore) IsAllowed(origin string) (bool, error) {
-	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM cors_origins WHERE origin = ?1`, origin).Scan(&count)
+	// prepare insert statement
+	stmt, err := tx.Prepare(`
+		INSERT INTO allowed_origin (url)
+		VALUES (?1);
+	`)
 	if err != nil {
-		return false, fmt.Errorf("failed to check cors origin: %w", err)
+		tx.Rollback()
+		return err
 	}
-	return count > 0, nil
+	defer stmt.Close()
+
+	// run insert batch on origins
+	for _, o := range origins {
+		_, err = stmt.Exec(o.URL)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
 }

@@ -4,24 +4,26 @@ import (
 	"encoding/json"
 	"fmt"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var corsCmd = &cmd.Command{
+var corsCmd = &args.Command{
 	Name: "cors",
 	Help: "Manage CORS origins",
-	Subcommands: []*cmd.Command{
+	Subcommands: []*args.Command{
 		corsListCmd,
 		corsAddCmd,
 		corsRemoveCmd,
 	},
 }
 
-var corsListCmd = &cmd.Command{
+var corsListCmd = &args.Command{
 	Name: "list",
 	Help: "List CORS origins",
-	Handler: func(input *cmd.Input) error {
-		response := &[]string{}
+	Handler: func(input *args.Input) error {
+		response := &struct {
+			Origins []string `json:"origins"`
+		}{}
 
 		if err := request(input, "GET", "/admin/cors", nil, response); err != nil {
 			return err
@@ -31,13 +33,13 @@ var corsListCmd = &cmd.Command{
 	},
 }
 
-var corsAddCmd = &cmd.Command{
+var corsAddCmd = &args.Command{
 	Name: "add",
 	Help: "Add CORS origin",
-	Operands: []cmd.Operand{
+	Operands: []args.Operand{
 		{Name: "origin", Help: "Origin to add (e.g., https://example.com)"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		origin := input.GetOperand("origin")
 
 		payload := map[string]string{
@@ -54,13 +56,13 @@ var corsAddCmd = &cmd.Command{
 	},
 }
 
-var corsRemoveCmd = &cmd.Command{
+var corsRemoveCmd = &args.Command{
 	Name: "remove",
 	Help: "Remove CORS origin",
-	Operands: []cmd.Operand{
+	Operands: []args.Operand{
 		{Name: "origin", Help: "Origin to remove"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		origin := input.GetOperand("origin")
 		path := fmt.Sprintf("/admin/cors/%s", origin)
 

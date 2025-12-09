@@ -2,9 +2,6 @@ package main
 
 import (
 	"bytes"
-	"cosign/internal/api"
-	"cosign/internal/database"
-	"cosign/internal/service"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -17,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
-	"github.com/gorilla/mux"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
 const (
@@ -26,114 +22,60 @@ const (
 	AUTHOR      = "jakintosh"
 	VERSION     = "0.1"
 	DEFAULT_CFG = "~/.config/cosign"
+	DEFAULT_ENV = "default"
 	DEFAULT_URL = "http://localhost:8080"
-	DEFAULT_DB  = "./cosign.db"
 )
 
 func main() {
 	root.Parse()
 }
 
-var root = &cmd.Command{
-	Name:    BIN_NAME,
-	Author:  AUTHOR,
-	Version: VERSION,
-	Help:    "public letter sign-on management system",
-	Subcommands: []*cmd.Command{
+var root = &args.Command{
+	Name: BIN_NAME,
+	Help: "public letter sign-on management system",
+	Config: &args.Config{
+		Author:  AUTHOR,
+		Version: VERSION,
+	},
+	Subcommands: []*args.Command{
 		serveCmd,
 		apiCmd,
 		envCmd,
 		statusCmd,
 	},
-	Options: []cmd.Option{
+	Options: []args.Option{
 		{
 			Long: "url",
-			Type: cmd.OptionTypeParameter,
-			Help: "API base URL",
+			Type: args.OptionTypeParameter,
+			Help: "cosign API base URL",
 		},
 		{
-			Long: "key",
-			Type: cmd.OptionTypeParameter,
-			Help: "API key for authenticated operations",
-		},
-		{
-			Long: "db",
-			Type: cmd.OptionTypeParameter,
-			Help: "database file path",
+			Long: "env",
+			Type: args.OptionTypeParameter,
+			Help: "environment name",
 		},
 		{
 			Long: "config-dir",
-			Type: cmd.OptionTypeParameter,
+			Type: args.OptionTypeParameter,
 			Help: "configuration directory",
 		},
 	},
 }
 
-var serveCmd = &cmd.Command{
-	Name: "serve",
-	Help: "Start the HTTP API server",
-	Options: []cmd.Option{
-		{Long: "db", Type: cmd.OptionTypeParameter, Help: "Database file path"},
-		{Long: "port", Type: cmd.OptionTypeParameter, Help: "Port to listen on"},
-		{Long: "wal", Type: cmd.OptionTypeFlag, Help: "Enable WAL mode for SQLite"},
-		{Long: "bootstrap-key", Type: cmd.OptionTypeParameter, Help: "Create initial API key with this ID"},
-	},
-	Handler: func(input *cmd.Input) error {
-		// Get options with defaults
-		dbPath := resolveOption(input, "db", "COSIGN_DB", DEFAULT_DB)
-		port := resolveOption(input, "port", "COSIGN_PORT", "8080")
-		if !strings.HasPrefix(port, ":") {
-			port = ":" + port
-		}
-		useWAL := input.GetFlag("wal")
-		bootstrapKey := input.GetParameter("bootstrap-key")
-
-		// Initialize database
-		log.Printf("Initializing database at %s...", dbPath)
-		if err := database.Init(dbPath, useWAL); err != nil {
-			return fmt.Errorf("failed to initialize database: %w", err)
-		}
-
-		// Inject stores into service layer
-		service.SetSignonStore(database.NewSignonStore())
-		service.SetLocationConfigStore(database.NewLocationConfigStore())
-		service.SetKeyStore(database.NewKeyStore())
-		service.SetCORSStore(database.NewCORSStore())
-
-		// Create bootstrap key if provided
-		if bootstrapKey != nil {
-			fullKey, err := service.CreateAPIKey(*bootstrapKey)
-			if err != nil {
-				log.Printf("Warning: failed to create bootstrap key: %v", err)
-			} else {
-				log.Printf("Bootstrap API key created: %s", fullKey)
-				log.Printf("Save this key securely - it will not be shown again!")
-			}
-		}
-
-		// Build router
-		r := mux.NewRouter()
-		api.BuildRouter(r.PathPrefix("/api/v1").Subrouter())
-
-		// Start server
-		log.Printf("Starting server on %s...", port)
-		return http.ListenAndServe(port, r)
-	},
-}
-
-// resolveOption resolves a configuration value with priority: CLI > Env > Default
-func resolveOption(i *cmd.Input, opt string, env string, def string) string {
-	if v := i.GetParameter(opt); v != nil && *v != "" {
-		return *v
+func loadCredential(
+	name string,
+	credsDir string,
+) string {
+	credPath := filepath.Join(credsDir, name)
+	cred, err := os.ReadFile(credPath)
+	if err != nil {
+		log.Fatalf("failed to load required credential '%s': %v\n", name, err)
 	}
-	if v := os.Getenv(env); v != "" {
-		return v
-	}
-	return def
+	return string(cred)
 }
 
 // baseURL resolves the API base URL from options, environment, or config
-func baseURL(i *cmd.Input) string {
+func baseURL(i *args.Input) string {
 	u := i.GetParameter("url")
 	envVar := os.Getenv("COSIGN_URL")
 	cfgURL, _ := loadBaseURL(i)
@@ -153,7 +95,7 @@ func baseURL(i *cmd.Input) string {
 }
 
 // baseConfigDir resolves the configuration directory
-func baseConfigDir(i *cmd.Input) string {
+func baseConfigDir(i *args.Input) string {
 	dir := DEFAULT_CFG
 	if c := i.GetParameter("config-dir"); c != nil && *c != "" {
 		dir = *c
@@ -166,18 +108,34 @@ func baseConfigDir(i *cmd.Input) string {
 	return dir
 }
 
+// activeEnv uses execution environment info to determine which environment is active
+func activeEnv(
+	i *args.Input,
+) string {
+	if e := i.GetParameter("env"); e != nil && *e != "" {
+		return *e
+	}
+	if env := os.Getenv("COFFER_ENV"); env != "" {
+		return env
+	}
+	if n, err := loadActiveEnv(i); err == nil && n != "" {
+		return n
+	}
+	return DEFAULT_ENV
+}
+
 // generateAPIKey creates a new API key in format {id}.{secret}
 func generateAPIKey() (string, error) {
 	keyBytes := make([]byte, 32)
 	if _, err := rand.Read(keyBytes); err != nil {
 		return "", err
 	}
-	return "key-" + hex.EncodeToString(keyBytes), nil
+	return "default." + hex.EncodeToString(keyBytes), nil
 }
 
 // request makes an HTTP request and unmarshals the response
 func request[T any](
-	i *cmd.Input,
+	i *args.Input,
 	method string,
 	path string,
 	body []byte,
@@ -246,7 +204,7 @@ func request[T any](
 
 // requestVoid makes an HTTP request without expecting a response body
 func requestVoid(
-	i *cmd.Input,
+	i *args.Input,
 	method string,
 	path string,
 	body []byte,

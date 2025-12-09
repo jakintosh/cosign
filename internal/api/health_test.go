@@ -1,14 +1,14 @@
 package api_test
 
 import (
+	"cosign/internal/util"
 	"net/http"
 	"testing"
 )
 
 func TestHealthCheckSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var resp map[string]any

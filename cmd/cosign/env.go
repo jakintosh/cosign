@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	cmd "git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
 var envCmd = &cmd.Command{

@@ -4,31 +4,31 @@ import (
 	"encoding/json"
 	"fmt"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var locationCmd = &cmd.Command{
+var locationCmd = &args.Command{
 	Name: "location",
 	Help: "Manage location settings and options",
-	Subcommands: []*cmd.Command{
+	Subcommands: []*args.Command{
 		locationConfigCmd,
 		locationOptionsCmd,
 	},
 }
 
-var locationConfigCmd = &cmd.Command{
+var locationConfigCmd = &args.Command{
 	Name: "config",
 	Help: "Manage location configuration",
-	Subcommands: []*cmd.Command{
+	Subcommands: []*args.Command{
 		locationConfigGetCmd,
 		locationConfigSetCmd,
 	},
 }
 
-var locationConfigGetCmd = &cmd.Command{
+var locationConfigGetCmd = &args.Command{
 	Name: "get",
 	Help: "Get location configuration",
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		response := &struct {
 			AllowCustomText bool `json:"allow_custom_text"`
 		}{}
@@ -41,14 +41,14 @@ var locationConfigGetCmd = &cmd.Command{
 	},
 }
 
-var locationConfigSetCmd = &cmd.Command{
+var locationConfigSetCmd = &args.Command{
 	Name: "set",
 	Help: "Update location configuration",
-	Options: []cmd.Option{
-		{Long: "allow-custom", Type: cmd.OptionTypeFlag, Help: "Allow custom text in location field"},
-		{Long: "strict", Type: cmd.OptionTypeFlag, Help: "Only allow preset location options"},
+	Options: []args.Option{
+		{Long: "allow-custom", Type: args.OptionTypeFlag, Help: "Allow custom text in location field"},
+		{Long: "strict", Type: args.OptionTypeFlag, Help: "Only allow preset location options"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		allowCustom := input.GetFlag("allow-custom")
 		strict := input.GetFlag("strict")
 
@@ -70,20 +70,20 @@ var locationConfigSetCmd = &cmd.Command{
 	},
 }
 
-var locationOptionsCmd = &cmd.Command{
+var locationOptionsCmd = &args.Command{
 	Name: "options",
 	Help: "Manage location options",
-	Subcommands: []*cmd.Command{
+	Subcommands: []*args.Command{
 		locationOptionsListCmd,
 		locationOptionsAddCmd,
 		locationOptionsRemoveCmd,
 	},
 }
 
-var locationOptionsListCmd = &cmd.Command{
+var locationOptionsListCmd = &args.Command{
 	Name: "list",
 	Help: "List location options",
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		response := &[]struct {
 			ID           int64  `json:"id"`
 			Value        string `json:"value"`
@@ -98,16 +98,16 @@ var locationOptionsListCmd = &cmd.Command{
 	},
 }
 
-var locationOptionsAddCmd = &cmd.Command{
+var locationOptionsAddCmd = &args.Command{
 	Name: "add",
 	Help: "Add location option",
-	Operands: []cmd.Operand{
+	Operands: []args.Operand{
 		{Name: "value", Help: "Location value to add"},
 	},
-	Options: []cmd.Option{
-		{Long: "order", Type: cmd.OptionTypeParameter, Help: "Display order"},
+	Options: []args.Option{
+		{Long: "order", Type: args.OptionTypeParameter, Help: "Display order"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		value := input.GetOperand("value")
 		order := 0
 		if o := input.GetParameter("order"); o != nil {
@@ -134,13 +134,13 @@ var locationOptionsAddCmd = &cmd.Command{
 	},
 }
 
-var locationOptionsRemoveCmd = &cmd.Command{
+var locationOptionsRemoveCmd = &args.Command{
 	Name: "remove",
 	Help: "Remove location option",
-	Operands: []cmd.Operand{
+	Operands: []args.Operand{
 		{Name: "id", Help: "Location option ID to remove"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		id := input.GetOperand("id")
 		path := fmt.Sprintf("/admin/location-config/options/%s", id)
 

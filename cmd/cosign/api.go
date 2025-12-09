@@ -1,13 +1,13 @@
 package main
 
 import (
-	cmd "git.sr.ht/~jakintosh/command-go"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var apiCmd = &cmd.Command{
+var apiCmd = &args.Command{
 	Name: "api",
 	Help: "API client commands",
-	Subcommands: []*cmd.Command{
+	Subcommands: []*args.Command{
 		signonsCmd,
 		locationCmd,
 		keysCmd,

@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"cosign/internal/util"
 	"fmt"
 	"net/http"
 	"testing"
@@ -10,9 +11,8 @@ import (
 
 // TestGetLocationConfigSuccess tests retrieving location config with public endpoint
 func TestGetLocationConfigSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var resp map[string]any
@@ -44,9 +44,8 @@ func TestGetLocationConfigSuccess(t *testing.T) {
 
 // TestGetLocationConfigCORSForbidden tests retrieving location config with disallowed origin
 func TestGetLocationConfigCORSForbidden(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var resp map[string]any
@@ -60,9 +59,8 @@ func TestGetLocationConfigCORSForbidden(t *testing.T) {
 
 // TestGetLocationConfigAdminSuccess tests retrieving location config with admin auth
 func TestGetLocationConfigAdminSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -88,9 +86,8 @@ func TestGetLocationConfigAdminSuccess(t *testing.T) {
 
 // TestGetLocationConfigAdminNoAuth tests retrieving location config without auth
 func TestGetLocationConfigAdminNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var resp map[string]any
@@ -101,9 +98,8 @@ func TestGetLocationConfigAdminNoAuth(t *testing.T) {
 
 // TestUpdateLocationConfigEnableCustomText tests enabling custom text
 func TestUpdateLocationConfigEnableCustomText(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -115,9 +111,8 @@ func TestUpdateLocationConfigEnableCustomText(t *testing.T) {
 
 // TestUpdateLocationConfigDisableCustomText tests disabling custom text
 func TestUpdateLocationConfigDisableCustomText(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -129,9 +124,8 @@ func TestUpdateLocationConfigDisableCustomText(t *testing.T) {
 
 // TestUpdateLocationConfigInvalidJSON tests updating with invalid JSON
 func TestUpdateLocationConfigInvalidJSON(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -143,9 +137,8 @@ func TestUpdateLocationConfigInvalidJSON(t *testing.T) {
 
 // TestUpdateLocationConfigNoAuth tests updating without authentication
 func TestUpdateLocationConfigNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{"allow_custom_text": true}`
@@ -156,9 +149,8 @@ func TestUpdateLocationConfigNoAuth(t *testing.T) {
 
 // TestListLocationOptionsSuccess tests listing location options
 func TestListLocationOptionsSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -186,9 +178,8 @@ func TestListLocationOptionsSuccess(t *testing.T) {
 
 // TestListLocationOptionsNoAuth tests listing options without authentication
 func TestListLocationOptionsNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var resp map[string]any
@@ -199,9 +190,8 @@ func TestListLocationOptionsNoAuth(t *testing.T) {
 
 // TestAddLocationOptionSuccess tests adding a location option
 func TestAddLocationOptionSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -223,9 +213,8 @@ func TestAddLocationOptionSuccess(t *testing.T) {
 
 // TestAddLocationOptionEmptyValue tests adding option with empty value
 func TestAddLocationOptionEmptyValue(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -238,9 +227,8 @@ func TestAddLocationOptionEmptyValue(t *testing.T) {
 
 // TestAddLocationOptionInvalidJSON tests adding option with invalid JSON
 func TestAddLocationOptionInvalidJSON(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -253,9 +241,8 @@ func TestAddLocationOptionInvalidJSON(t *testing.T) {
 
 // TestAddLocationOptionNoAuth tests adding option without authentication
 func TestAddLocationOptionNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{"value": "New York", "display_order": 1}`
@@ -267,9 +254,8 @@ func TestAddLocationOptionNoAuth(t *testing.T) {
 
 // TestUpdateLocationOptionSuccess tests updating a location option
 func TestUpdateLocationOptionSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -291,9 +277,8 @@ func TestUpdateLocationOptionSuccess(t *testing.T) {
 
 // TestUpdateLocationOptionInvalidID tests updating with invalid ID
 func TestUpdateLocationOptionInvalidID(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -305,9 +290,8 @@ func TestUpdateLocationOptionInvalidID(t *testing.T) {
 
 // TestUpdateLocationOptionNotFound tests updating non-existent option
 func TestUpdateLocationOptionNotFound(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -319,9 +303,8 @@ func TestUpdateLocationOptionNotFound(t *testing.T) {
 
 // TestUpdateLocationOptionEmptyValue tests updating with empty value
 func TestUpdateLocationOptionEmptyValue(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -343,9 +326,8 @@ func TestUpdateLocationOptionEmptyValue(t *testing.T) {
 
 // TestUpdateLocationOptionInvalidJSON tests updating with invalid JSON
 func TestUpdateLocationOptionInvalidJSON(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -357,9 +339,8 @@ func TestUpdateLocationOptionInvalidJSON(t *testing.T) {
 
 // TestUpdateLocationOptionNoAuth tests updating without authentication
 func TestUpdateLocationOptionNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{"value": "Boston", "display_order": 2}`
@@ -370,9 +351,8 @@ func TestUpdateLocationOptionNoAuth(t *testing.T) {
 
 // TestDeleteLocationOptionSuccess tests deleting a location option
 func TestDeleteLocationOptionSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -393,9 +373,8 @@ func TestDeleteLocationOptionSuccess(t *testing.T) {
 
 // TestDeleteLocationOptionInvalidID tests deleting with invalid ID
 func TestDeleteLocationOptionInvalidID(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -406,9 +385,8 @@ func TestDeleteLocationOptionInvalidID(t *testing.T) {
 
 // TestDeleteLocationOptionNotFound tests deleting non-existent option
 func TestDeleteLocationOptionNotFound(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -419,9 +397,8 @@ func TestDeleteLocationOptionNotFound(t *testing.T) {
 
 // TestDeleteLocationOptionNoAuth tests deleting without authentication
 func TestDeleteLocationOptionNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	result := del(router, "/api/v1/admin/location-config/options/1", nil)

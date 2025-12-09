@@ -4,25 +4,25 @@ import (
 	"encoding/json"
 	"fmt"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var keysCmd = &cmd.Command{
+var keysCmd = &args.Command{
 	Name: "keys",
 	Help: "Manage API keys",
-	Subcommands: []*cmd.Command{
+	Subcommands: []*args.Command{
 		keysCreateCmd,
 		keysDeleteCmd,
 	},
 }
 
-var keysCreateCmd = &cmd.Command{
+var keysCreateCmd = &args.Command{
 	Name: "create",
 	Help: "Create new API key",
-	Operands: []cmd.Operand{
+	Operands: []args.Operand{
 		{Name: "id", Help: "Optional key ID (generated if not provided)"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		id := input.GetOperand("id")
 
 		payload := map[string]string{}
@@ -45,13 +45,13 @@ var keysCreateCmd = &cmd.Command{
 	},
 }
 
-var keysDeleteCmd = &cmd.Command{
+var keysDeleteCmd = &args.Command{
 	Name: "delete",
 	Help: "Delete API key",
-	Operands: []cmd.Operand{
+	Operands: []args.Operand{
 		{Name: "id", Help: "Key ID to delete"},
 	},
-	Handler: func(input *cmd.Input) error {
+	Handler: func(input *args.Input) error {
 		id := input.GetOperand("id")
 		path := fmt.Sprintf("/admin/keys/%s", id)
 

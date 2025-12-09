@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"cosign/internal/util"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,9 +12,8 @@ import (
 
 // TestCreateSignonSuccess tests creating a sign-on with valid data
 func TestCreateSignonSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{
@@ -46,9 +46,8 @@ func TestCreateSignonSuccess(t *testing.T) {
 
 // TestCreateSignonEmptyName tests creating a sign-on with empty name
 func TestCreateSignonEmptyName(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{
@@ -66,9 +65,8 @@ func TestCreateSignonEmptyName(t *testing.T) {
 
 // TestCreateSignonEmptyEmail tests creating a sign-on with empty email
 func TestCreateSignonEmptyEmail(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{
@@ -86,9 +84,8 @@ func TestCreateSignonEmptyEmail(t *testing.T) {
 
 // TestCreateSignonEmptyLocation tests creating a sign-on with empty location
 func TestCreateSignonEmptyLocation(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{
@@ -106,9 +103,8 @@ func TestCreateSignonEmptyLocation(t *testing.T) {
 
 // TestCreateSignonInvalidEmail tests creating a sign-on with invalid email format
 func TestCreateSignonInvalidEmail(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{
@@ -126,9 +122,8 @@ func TestCreateSignonInvalidEmail(t *testing.T) {
 
 // TestCreateSignonDuplicateEmail tests creating a sign-on with duplicate email
 func TestCreateSignonDuplicateEmail(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	corsHeader := header{"Origin", "http://test-origin"}
@@ -157,9 +152,8 @@ func TestCreateSignonDuplicateEmail(t *testing.T) {
 
 // TestCreateSignonCORSForbidden tests creating a sign-on with disallowed CORS origin
 func TestCreateSignonCORSForbidden(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{
@@ -177,9 +171,8 @@ func TestCreateSignonCORSForbidden(t *testing.T) {
 
 // TestCreateSignonInvalidJSON tests creating a sign-on with invalid JSON
 func TestCreateSignonInvalidJSON(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	body := `{invalid json`
@@ -193,9 +186,8 @@ func TestCreateSignonInvalidJSON(t *testing.T) {
 
 // TestListSignonsSuccess tests listing sign-ons with default pagination
 func TestListSignonsSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	// Create some sign-ons
@@ -239,9 +231,8 @@ func TestListSignonsSuccess(t *testing.T) {
 
 // TestListSignonsEmptyList tests listing sign-ons when none exist
 func TestListSignonsEmptyList(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var listResp map[string]any
@@ -268,9 +259,8 @@ func TestListSignonsEmptyList(t *testing.T) {
 
 // TestListSignonsWithPagination tests listing sign-ons with custom limit and offset
 func TestListSignonsWithPagination(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	// Create 5 sign-ons
@@ -315,9 +305,8 @@ func TestListSignonsWithPagination(t *testing.T) {
 
 // TestListSignonsCORSValidation tests listing sign-ons with CORS validation
 func TestListSignonsCORSValidation(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var listResp map[string]any
@@ -331,9 +320,8 @@ func TestListSignonsCORSValidation(t *testing.T) {
 
 // TestListSignonsAdminSuccess tests listing sign-ons with admin authentication
 func TestListSignonsAdminSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	// Create a sign-on
@@ -352,9 +340,8 @@ func TestListSignonsAdminSuccess(t *testing.T) {
 
 // TestListSignonsAdminNoAuth tests listing sign-ons without authentication
 func TestListSignonsAdminNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	var listResp map[string]any
@@ -365,9 +352,8 @@ func TestListSignonsAdminNoAuth(t *testing.T) {
 
 // TestDeleteSignonSuccess tests deleting a sign-on
 func TestDeleteSignonSuccess(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	// Create a sign-on
@@ -388,9 +374,8 @@ func TestDeleteSignonSuccess(t *testing.T) {
 
 // TestDeleteSignonNotFound tests deleting a non-existent sign-on
 func TestDeleteSignonNotFound(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -401,9 +386,8 @@ func TestDeleteSignonNotFound(t *testing.T) {
 
 // TestDeleteSignonInvalidID tests deleting a sign-on with invalid ID
 func TestDeleteSignonInvalidID(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	authHeader := makeTestAuthHeader(t)
@@ -414,9 +398,8 @@ func TestDeleteSignonInvalidID(t *testing.T) {
 
 // TestDeleteSignonNoAuth tests deleting a sign-on without authentication
 func TestDeleteSignonNoAuth(t *testing.T) {
-	setupTestDB(t)
-	setupServices(t)
 
+	util.SetupTestDB(t)
 	router := setupRouter()
 
 	result := del(router, "/api/v1/admin/signons/1", nil)

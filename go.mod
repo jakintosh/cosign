@@ -3,7 +3,7 @@ module cosign
 go 1.25.3
 
 require (
-	git.sr.ht/~jakintosh/command-go v0.0.4
+	git.sr.ht/~jakintosh/command-go v0.2.1
 	github.com/gorilla/mux v1.8.1
 	golang.org/x/time v0.14.0
 	modernc.org/sqlite v1.39.1

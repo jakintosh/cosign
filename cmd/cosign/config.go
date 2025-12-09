@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	cmd "git.sr.ht/~jakintosh/command-go"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
 // Config represents the client configuration file
@@ -23,12 +23,12 @@ type EnvConfig struct {
 }
 
 // configPath returns the path to the config file
-func configPath(i *cmd.Input) string {
+func configPath(i *args.Input) string {
 	return filepath.Join(baseConfigDir(i), "config.json")
 }
 
 // loadConfig loads the configuration from disk
-func loadConfig(i *cmd.Input) (*Config, error) {
+func loadConfig(i *args.Input) (*Config, error) {
 	path := configPath(i)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -54,7 +54,7 @@ func loadConfig(i *cmd.Input) (*Config, error) {
 }
 
 // saveConfig saves the configuration to disk
-func saveConfig(i *cmd.Input, cfg *Config) error {
+func saveConfig(i *args.Input, cfg *Config) error {
 	dir := baseConfigDir(i)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -68,7 +68,7 @@ func saveConfig(i *cmd.Input, cfg *Config) error {
 }
 
 // loadActiveEnv returns the name of the active environment
-func loadActiveEnv(i *cmd.Input) (string, error) {
+func loadActiveEnv(i *args.Input) (string, error) {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return "", err
@@ -77,7 +77,7 @@ func loadActiveEnv(i *cmd.Input) (string, error) {
 }
 
 // saveActiveEnv sets the active environment
-func saveActiveEnv(i *cmd.Input, name string) error {
+func saveActiveEnv(i *args.Input, name string) error {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return err
@@ -90,15 +90,12 @@ func saveActiveEnv(i *cmd.Input, name string) error {
 }
 
 // loadAPIKey returns the API key for the active environment
-func loadAPIKey(i *cmd.Input) (string, error) {
+func loadAPIKey(i *args.Input) (string, error) {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return "", err
 	}
-	env := "default"
-	if active, err := loadActiveEnv(i); err == nil && active != "" {
-		env = active
-	}
+	env := activeEnv(i)
 	if e, ok := cfg.Envs[env]; ok {
 		return strings.TrimSpace(e.APIKey), nil
 	}
@@ -106,15 +103,12 @@ func loadAPIKey(i *cmd.Input) (string, error) {
 }
 
 // saveAPIKey saves the API key for the active environment
-func saveAPIKey(i *cmd.Input, key string) error {
+func saveAPIKey(i *args.Input, key string) error {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return err
 	}
-	env := "default"
-	if active, err := loadActiveEnv(i); err == nil && active != "" {
-		env = active
-	}
+	env := activeEnv(i)
 	ec := cfg.Envs[env]
 	ec.APIKey = key
 	cfg.Envs[env] = ec
@@ -122,15 +116,12 @@ func saveAPIKey(i *cmd.Input, key string) error {
 }
 
 // deleteAPIKey removes the API key for the active environment
-func deleteAPIKey(i *cmd.Input) error {
+func deleteAPIKey(i *args.Input) error {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return err
 	}
-	env := "default"
-	if active, err := loadActiveEnv(i); err == nil && active != "" {
-		env = active
-	}
+	env := activeEnv(i)
 	if ec, ok := cfg.Envs[env]; ok {
 		ec.APIKey = ""
 		cfg.Envs[env] = ec
@@ -139,15 +130,12 @@ func deleteAPIKey(i *cmd.Input) error {
 }
 
 // loadBaseURL returns the base URL for the active environment
-func loadBaseURL(i *cmd.Input) (string, error) {
+func loadBaseURL(i *args.Input) (string, error) {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return "", err
 	}
-	env := "default"
-	if active, err := loadActiveEnv(i); err == nil && active != "" {
-		env = active
-	}
+	env := activeEnv(i)
 	if e, ok := cfg.Envs[env]; ok {
 		return strings.TrimSpace(e.BaseURL), nil
 	}
@@ -155,15 +143,12 @@ func loadBaseURL(i *cmd.Input) (string, error) {
 }
 
 // saveBaseURL saves the base URL for the active environment
-func saveBaseURL(i *cmd.Input, url string) error {
+func saveBaseURL(i *args.Input, url string) error {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return err
 	}
-	env := "default"
-	if active, err := loadActiveEnv(i); err == nil && active != "" {
-		env = active
-	}
+	env := activeEnv(i)
 	ec := cfg.Envs[env]
 	ec.BaseURL = url
 	cfg.Envs[env] = ec
@@ -171,15 +156,12 @@ func saveBaseURL(i *cmd.Input, url string) error {
 }
 
 // deleteBaseURL removes the base URL for the active environment
-func deleteBaseURL(i *cmd.Input) error {
+func deleteBaseURL(i *args.Input) error {
 	cfg, err := loadConfig(i)
 	if err != nil {
 		return err
 	}
-	env := "default"
-	if active, err := loadActiveEnv(i); err == nil && active != "" {
-		env = active
-	}
+	env := activeEnv(i)
 	if ec, ok := cfg.Envs[env]; ok {
 		ec.BaseURL = ""
 		cfg.Envs[env] = ec
