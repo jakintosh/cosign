@@ -21,7 +21,7 @@ func TestCreateAPIKeyEndpoint(t *testing.T) {
 		Token string       `json:"data"`
 	}
 	auth := makeTestAuthHeader(t)
-	result := post(router, "/api/v1/settings/keys", "", &response, auth)
+	result := post(router, "/api/v1/admin/keys", "", &response, auth)
 
 	// validate result
 	expectStatus(t, http.StatusCreated, result)
@@ -52,7 +52,7 @@ func TestDeleteAPIKeyEndpoint(t *testing.T) {
 
 	// del key id
 	auth := makeTestAuthHeader(t)
-	result := del(router, "/api/v1/settings/keys/"+id, nil, auth)
+	result := del(router, "/api/v1/admin/keys/"+id, nil, auth)
 
 	// validate result
 	expectStatus(t, http.StatusNoContent, result)

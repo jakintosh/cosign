@@ -30,10 +30,6 @@ func BuildRouter(r *mux.Router) {
 	buildAdminLocationConfigRouter(admin.PathPrefix("/location-config").Subrouter())
 	buildAdminKeysRouter(admin.PathPrefix("/keys").Subrouter())
 	buildAdminCORSRouter(admin.PathPrefix("/cors").Subrouter())
-
-	// Legacy settings prefix for admin endpoints used by clients/tests
-	settings := r.PathPrefix("/settings").Subrouter()
-	buildAdminKeysRouter(settings.PathPrefix("/keys").Subrouter())
 }
 
 // writeJSON writes a JSON response with the given status code
