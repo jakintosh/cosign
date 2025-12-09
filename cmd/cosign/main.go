@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +13,7 @@ import (
 	"time"
 
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
+	"git.sr.ht/~jakintosh/command-go/pkg/envs"
 )
 
 const (
@@ -40,7 +39,7 @@ var root = &args.Command{
 	Subcommands: []*args.Command{
 		serveCmd,
 		apiCmd,
-		envCmd,
+		envs.Command(DEFAULT_CFG),
 		statusCmd,
 	},
 	Options: []args.Option{
@@ -74,63 +73,47 @@ func loadCredential(
 	return string(cred)
 }
 
-// baseURL resolves the API base URL from options, environment, or config
-func baseURL(i *args.Input) string {
-	u := i.GetParameter("url")
-	envVar := os.Getenv("COSIGN_URL")
-	cfgURL, _ := loadBaseURL(i)
-
-	var url string
-	switch {
-	case u != nil && *u != "":
-		url = strings.TrimRight(*u, "/")
-	case envVar != "":
-		url = strings.TrimRight(envVar, "/")
-	case cfgURL != "":
-		url = strings.TrimRight(cfgURL, "/")
-	default:
-		url = DEFAULT_URL
+func envConfig(i *args.Input) (*envs.Config, error) {
+	cfg, err := envs.BuildConfig(DEFAULT_CFG, i)
+	if err != nil {
+		return nil, err
 	}
-	return url + "/api/v1"
+	if cfg.ActiveEnv == "" {
+		cfg.ActiveEnv = DEFAULT_ENV
+	}
+	return cfg, nil
 }
 
-// baseConfigDir resolves the configuration directory
-func baseConfigDir(i *args.Input) string {
-	dir := DEFAULT_CFG
-	if c := i.GetParameter("config-dir"); c != nil && *c != "" {
-		dir = *c
+// baseURLWithConfig resolves the API base URL from options, environment, or config
+func baseURLWithConfig(i *args.Input, cfg *envs.Config) string {
+	if u := i.GetParameter("url"); u != nil && *u != "" {
+		return strings.TrimRight(*u, "/") + "/api/v1"
 	}
-	if strings.HasPrefix(dir, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			dir = filepath.Join(home, dir[2:])
+	if envVar := os.Getenv("COSIGN_URL"); envVar != "" {
+		return strings.TrimRight(envVar, "/") + "/api/v1"
+	}
+	if cfg != nil {
+		if url := cfg.GetBaseUrl(); url != "" {
+			return strings.TrimRight(url, "/") + "/api/v1"
 		}
 	}
-	return dir
+	return DEFAULT_URL + "/api/v1"
+}
+
+// baseURL resolves the API base URL from options, environment, or config
+func baseURL(i *args.Input) string {
+	cfg, _ := envConfig(i)
+	return baseURLWithConfig(i, cfg)
 }
 
 // activeEnv uses execution environment info to determine which environment is active
 func activeEnv(
 	i *args.Input,
 ) string {
-	if e := i.GetParameter("env"); e != nil && *e != "" {
-		return *e
-	}
-	if env := os.Getenv("COFFER_ENV"); env != "" {
-		return env
-	}
-	if n, err := loadActiveEnv(i); err == nil && n != "" {
-		return n
+	if cfg, err := envConfig(i); err == nil && cfg.GetActiveEnv() != "" {
+		return cfg.GetActiveEnv()
 	}
 	return DEFAULT_ENV
-}
-
-// generateAPIKey creates a new API key in format {id}.{secret}
-func generateAPIKey() (string, error) {
-	keyBytes := make([]byte, 32)
-	if _, err := rand.Read(keyBytes); err != nil {
-		return "", err
-	}
-	return "default." + hex.EncodeToString(keyBytes), nil
 }
 
 // request makes an HTTP request and unmarshals the response
@@ -141,7 +124,12 @@ func request[T any](
 	body []byte,
 	response *T,
 ) error {
-	url := baseURL(i) + path
+	cfg, err := envConfig(i)
+	if err != nil {
+		return err
+	}
+
+	url := baseURLWithConfig(i, cfg) + path
 
 	// create request
 	var reader io.Reader
@@ -159,7 +147,7 @@ func request[T any](
 	}
 
 	// set authorization header
-	if key, err := loadAPIKey(i); err == nil && key != "" {
+	if key := cfg.GetApiKey(); key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
 

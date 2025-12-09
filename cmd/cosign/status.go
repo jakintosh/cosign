@@ -19,12 +19,17 @@ var statusCmd = &args.Command{
 	},
 	Handler: func(i *args.Input) error {
 
-		env := "default"
-		if active, err := loadActiveEnv(i); err == nil && active != "" {
-			env = active
+		cfg, err := envConfig(i)
+		env := DEFAULT_ENV
+		key := ""
+		if err == nil {
+			if cfg.GetActiveEnv() != "" {
+				env = cfg.GetActiveEnv()
+			}
+			key = cfg.GetApiKey()
 		}
-		base := strings.TrimSuffix(baseURL(i), "/api/v1")
-		key, _ := loadAPIKey(i)
+
+		base := strings.TrimSuffix(baseURLWithConfig(i, cfg), "/api/v1")
 
 		fmt.Printf("Environment: %s\n", env)
 		fmt.Printf("Base URL: %s\n", base)
@@ -35,8 +40,7 @@ var statusCmd = &args.Command{
 		}
 
 		response := &map[string]string{}
-		err := request(i, "GET", "/health", nil, response)
-		if err != nil {
+		if err := request(i, "GET", "/health", nil, response); err != nil {
 			fmt.Println("Health: down")
 			if i.GetFlag("verbose") {
 				fmt.Printf("  error: %v\n", err)
