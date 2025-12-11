@@ -15,6 +15,7 @@ func TestCreateSignonSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{
 		"name": "John Doe",
@@ -24,7 +25,7 @@ func TestCreateSignonSuccess(t *testing.T) {
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusCreated, result)
 
@@ -49,6 +50,7 @@ func TestCreateSignonEmptyName(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{
 		"name": "",
@@ -58,7 +60,7 @@ func TestCreateSignonEmptyName(t *testing.T) {
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -68,6 +70,7 @@ func TestCreateSignonEmptyEmail(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{
 		"name": "John Doe",
@@ -77,7 +80,7 @@ func TestCreateSignonEmptyEmail(t *testing.T) {
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -87,6 +90,7 @@ func TestCreateSignonEmptyLocation(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{
 		"name": "John Doe",
@@ -96,7 +100,7 @@ func TestCreateSignonEmptyLocation(t *testing.T) {
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -106,6 +110,7 @@ func TestCreateSignonInvalidEmail(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{
 		"name": "John Doe",
@@ -115,7 +120,7 @@ func TestCreateSignonInvalidEmail(t *testing.T) {
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -125,6 +130,7 @@ func TestCreateSignonDuplicateEmail(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	corsHeader := header{"Origin", "http://test-origin"}
 
@@ -135,7 +141,7 @@ func TestCreateSignonDuplicateEmail(t *testing.T) {
 		"location": "New York"
 	}`
 	var resp1 map[string]any
-	result1 := post(router, "/api/v1/signons", body1, &resp1, corsHeader)
+	result1 := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body1, &resp1, corsHeader)
 	expectStatus(t, http.StatusCreated, result1)
 
 	// Second sign-on with same email
@@ -145,7 +151,7 @@ func TestCreateSignonDuplicateEmail(t *testing.T) {
 		"location": "Los Angeles"
 	}`
 	var resp2 map[string]any
-	result2 := post(router, "/api/v1/signons", body2, &resp2, corsHeader)
+	result2 := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body2, &resp2, corsHeader)
 
 	expectStatus(t, http.StatusConflict, result2)
 }
@@ -155,6 +161,7 @@ func TestCreateSignonCORSForbidden(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{
 		"name": "John Doe",
@@ -164,7 +171,7 @@ func TestCreateSignonCORSForbidden(t *testing.T) {
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://disallowed-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusForbidden, result)
 }
@@ -174,12 +181,13 @@ func TestCreateSignonInvalidJSON(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{invalid json`
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := post(router, "/api/v1/signons", body, &resp, corsHeader)
+	result := post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -189,6 +197,7 @@ func TestListSignonsSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	// Create some sign-ons
 	corsHeader := header{"Origin", "http://test-origin"}
@@ -199,12 +208,12 @@ func TestListSignonsSuccess(t *testing.T) {
 			"location": "City` + fmt.Sprintf("%d", i) + `"
 		}`
 		var resp map[string]any
-		post(router, "/api/v1/signons", body, &resp, corsHeader)
+		post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 	}
 
 	// List sign-ons
 	var listResp map[string]any
-	result := get(router, "/api/v1/signons", &listResp, corsHeader)
+	result := get(router, "/api/v1/campaigns/"+campaignID+"/signons", &listResp, corsHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
@@ -234,10 +243,11 @@ func TestListSignonsEmptyList(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var listResp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := get(router, "/api/v1/signons", &listResp, corsHeader)
+	result := get(router, "/api/v1/campaigns/"+campaignID+"/signons", &listResp, corsHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
@@ -262,18 +272,19 @@ func TestListSignonsWithPagination(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	// Create 5 sign-ons
 	corsHeader := header{"Origin", "http://test-origin"}
 	for i := 1; i <= 5; i++ {
 		body := `{"name": "Person", "email": "person` + fmt.Sprintf("%d", i) + `@example.com", "location": "City"}`
 		var resp map[string]any
-		post(router, "/api/v1/signons", body, &resp, corsHeader)
+		post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 	}
 
 	// List with limit=2, offset=1
 	var listResp map[string]any
-	result := get(router, "/api/v1/signons?limit=2&offset=1", &listResp, corsHeader)
+	result := get(router, "/api/v1/campaigns/"+campaignID+"/signons?limit=2&offset=1", &listResp, corsHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
@@ -308,10 +319,11 @@ func TestListSignonsCORSValidation(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var listResp map[string]any
 	corsHeader := header{"Origin", "http://disallowed-origin"}
-	result := get(router, "/api/v1/signons", &listResp, corsHeader)
+	result := get(router, "/api/v1/campaigns/"+campaignID+"/signons", &listResp, corsHeader)
 
 	expectStatus(t, http.StatusForbidden, result)
 }
@@ -323,17 +335,18 @@ func TestListSignonsAdminSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	// Create a sign-on
 	corsHeader := header{"Origin", "http://test-origin"}
 	body := `{"name": "John", "email": "john@example.com", "location": "NYC"}`
 	var resp map[string]any
-	post(router, "/api/v1/signons", body, &resp, corsHeader)
+	post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &resp, corsHeader)
 
 	// List with auth
 	authHeader := makeTestAuthHeader(t)
 	var listResp map[string]any
-	result := get(router, "/api/v1/admin/signons", &listResp, authHeader)
+	result := get(router, "/api/v1/admin/campaigns/"+campaignID+"/signons", &listResp, authHeader)
 
 	expectStatus(t, http.StatusOK, result)
 }
@@ -343,9 +356,10 @@ func TestListSignonsAdminNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var listResp map[string]any
-	result := get(router, "/api/v1/admin/signons", &listResp)
+	result := get(router, "/api/v1/admin/campaigns/"+campaignID+"/signons", &listResp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }
@@ -355,19 +369,20 @@ func TestDeleteSignonSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	// Create a sign-on
 	corsHeader := header{"Origin", "http://test-origin"}
 	body := `{"name": "John", "email": "john@example.com", "location": "NYC"}`
 	var createResp map[string]any
-	post(router, "/api/v1/signons", body, &createResp, corsHeader)
+	post(router, "/api/v1/campaigns/"+campaignID+"/signons", body, &createResp, corsHeader)
 
 	createdData, _ := createResp["data"].(map[string]any)
 	signonID := createdData["id"]
 
 	// Delete with auth
 	authHeader := makeTestAuthHeader(t)
-	result := del(router, "/api/v1/admin/signons/"+formatID(signonID), nil, authHeader)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/signons/"+formatID(signonID), nil, authHeader)
 
 	expectStatus(t, http.StatusNoContent, result)
 }
@@ -377,9 +392,10 @@ func TestDeleteSignonNotFound(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
-	result := del(router, "/api/v1/admin/signons/999", nil, authHeader)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/signons/999", nil, authHeader)
 
 	expectStatus(t, http.StatusNotFound, result)
 }
@@ -389,9 +405,10 @@ func TestDeleteSignonInvalidID(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
-	result := del(router, "/api/v1/admin/signons/invalid", nil, authHeader)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/signons/invalid", nil, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -401,8 +418,9 @@ func TestDeleteSignonNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
-	result := del(router, "/api/v1/admin/signons/1", nil)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/signons/1", nil)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }

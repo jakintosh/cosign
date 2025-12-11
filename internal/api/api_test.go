@@ -45,6 +45,15 @@ func makeTestAuthHeader(t *testing.T) header {
 	return auth
 }
 
+// createTestCampaign creates a test campaign and returns its UUID
+func createTestCampaign(t *testing.T) string {
+	campaign, err := service.CreateCampaign("Test Campaign")
+	if err != nil {
+		t.Fatalf("Failed to create test campaign: %v", err)
+	}
+	return campaign.ID
+}
+
 // expectStatus validates that the HTTP result has the expected status code
 func expectStatus(t *testing.T, expectedCode int, result httpResult) {
 	if result.Code != expectedCode {

@@ -38,8 +38,9 @@ func SetupTestDB(t *testing.T) {
 
 	// Set up all store implementations
 	database.Init(":memory:", false)
+	service.SetCampaignStore(database.NewCampaignStore())
 	service.SetSignonStore(database.NewSignonStore())
-	service.SetLocationConfigStore(database.NewLocationConfigStore())
+	service.SetLocationOptionStore(database.NewLocationOptionStore())
 	service.SetKeyStore(database.NewKeyStore())
 	service.SetCORSStore(database.NewCORSStore())
 
@@ -52,8 +53,9 @@ func SetupTestDB(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
+		service.SetCampaignStore(nil)
 		service.SetSignonStore(nil)
-		service.SetLocationConfigStore(nil)
+		service.SetLocationOptionStore(nil)
 		service.SetKeyStore(nil)
 		service.SetCORSStore(nil)
 	})

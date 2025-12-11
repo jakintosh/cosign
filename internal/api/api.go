@@ -22,12 +22,13 @@ type APIResponse struct {
 func BuildRouter(r *mux.Router) {
 
 	buildHealthRouter(r.PathPrefix("/health").Subrouter())
-	buildSignonRouter(r.PathPrefix("/signons").Subrouter())
-	buildLocationConfigRouter(r.PathPrefix("/location-config").Subrouter())
 
+	// Campaign-scoped public routes
+	buildCampaignPublicRouter(r.PathPrefix("/campaigns").Subrouter())
+
+	// Admin routes
 	admin := r.PathPrefix("/admin").Subrouter()
-	buildAdminSignonRouter(admin.PathPrefix("/signons").Subrouter())
-	buildAdminLocationConfigRouter(admin.PathPrefix("/location-config").Subrouter())
+	buildAdminCampaignRouter(admin.PathPrefix("/campaigns").Subrouter())
 	buildAdminKeysRouter(admin.PathPrefix("/keys").Subrouter())
 	buildAdminCORSRouter(admin.PathPrefix("/cors").Subrouter())
 }

@@ -29,11 +29,17 @@ var locationConfigGetCmd = &args.Command{
 	Name: "get",
 	Help: "Get location configuration",
 	Handler: func(input *args.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
 		response := &struct {
 			AllowCustomText bool `json:"allow_custom_text"`
 		}{}
 
-		if err := request(input, "GET", "/location-config", nil, response); err != nil {
+		path := fmt.Sprintf("/admin/campaigns/%s/config", campaignID)
+		if err := request(input, "GET", path, nil, response); err != nil {
 			return err
 		}
 
@@ -44,24 +50,52 @@ var locationConfigGetCmd = &args.Command{
 var locationConfigSetCmd = &args.Command{
 	Name: "set",
 	Help: "Update location configuration",
-	Options: []args.Option{
-		{Long: "allow-custom", Type: args.OptionTypeFlag, Help: "Allow custom text in location field"},
-		{Long: "strict", Type: args.OptionTypeFlag, Help: "Only allow preset location options"},
+	Subcommands: []*args.Command{
+		locationConfigSetOpenCmd,
+		locationConfigSetStrictCmd,
 	},
-	Handler: func(input *args.Input) error {
-		allowCustom := input.GetFlag("allow-custom")
-		strict := input.GetFlag("strict")
+}
 
-		if allowCustom && strict {
-			return fmt.Errorf("cannot use both --allow-custom and --strict")
+var locationConfigSetOpenCmd = &args.Command{
+	Name: "open",
+	Help: "Allow custom text in location field",
+	Handler: func(input *args.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
 		}
 
 		payload := map[string]bool{
-			"allow_custom_text": !strict,
+			"allow_custom_text": true,
 		}
 
 		body, _ := json.Marshal(payload)
-		if err := requestVoid(input, "PUT", "/admin/location-config", body); err != nil {
+		path := fmt.Sprintf("/admin/campaigns/%s/config", campaignID)
+		if err := requestVoid(input, "PUT", path, body); err != nil {
+			return err
+		}
+
+		fmt.Println("Location configuration updated")
+		return nil
+	},
+}
+
+var locationConfigSetStrictCmd = &args.Command{
+	Name: "strict",
+	Help: "Only allow preset location options",
+	Handler: func(input *args.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
+		payload := map[string]bool{
+			"allow_custom_text": false,
+		}
+
+		body, _ := json.Marshal(payload)
+		path := fmt.Sprintf("/admin/campaigns/%s/config", campaignID)
+		if err := requestVoid(input, "PUT", path, body); err != nil {
 			return err
 		}
 
@@ -84,13 +118,19 @@ var locationOptionsListCmd = &args.Command{
 	Name: "list",
 	Help: "List location options",
 	Handler: func(input *args.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
 		response := &[]struct {
 			ID           int64  `json:"id"`
 			Value        string `json:"value"`
 			DisplayOrder int    `json:"display_order"`
 		}{}
 
-		if err := request(input, "GET", "/admin/location-config/options", nil, response); err != nil {
+		path := fmt.Sprintf("/admin/campaigns/%s/options", campaignID)
+		if err := request(input, "GET", path, nil, response); err != nil {
 			return err
 		}
 
@@ -108,6 +148,11 @@ var locationOptionsAddCmd = &args.Command{
 		{Long: "order", Type: args.OptionTypeParameter, Help: "Display order"},
 	},
 	Handler: func(input *args.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
 		value := input.GetOperand("value")
 		order := 0
 		if o := input.GetParameter("order"); o != nil {
@@ -126,7 +171,8 @@ var locationOptionsAddCmd = &args.Command{
 			DisplayOrder int    `json:"display_order"`
 		}{}
 
-		if err := request(input, "POST", "/admin/location-config/options", body, response); err != nil {
+		path := fmt.Sprintf("/admin/campaigns/%s/options", campaignID)
+		if err := request(input, "POST", path, body, response); err != nil {
 			return err
 		}
 
@@ -141,8 +187,13 @@ var locationOptionsRemoveCmd = &args.Command{
 		{Name: "id", Help: "Location option ID to remove"},
 	},
 	Handler: func(input *args.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
 		id := input.GetOperand("id")
-		path := fmt.Sprintf("/admin/location-config/options/%s", id)
+		path := fmt.Sprintf("/admin/campaigns/%s/options/%s", campaignID, id)
 
 		if err := requestVoid(input, "DELETE", path, nil); err != nil {
 			return err

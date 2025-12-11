@@ -58,6 +58,11 @@ var root = &args.Command{
 			Type: args.OptionTypeParameter,
 			Help: "configuration directory",
 		},
+		{
+			Long: "campaign-uuid",
+			Type: args.OptionTypeParameter,
+			Help: "campaign UUID",
+		},
 	},
 }
 

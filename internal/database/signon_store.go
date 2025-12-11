@@ -14,10 +14,10 @@ func NewSignonStore() DBSignonStore {
 	return DBSignonStore{}
 }
 
-func (DBSignonStore) Insert(name, email, location string, createdAt int64) (int64, error) {
-	result, err := db.Exec(
-		`INSERT INTO signons (name, email, location, created_at) VALUES (?1, ?2, ?3, ?4)`,
-		name, email, location, createdAt,
+func (DBSignonStore) Insert(campaignID, name, email, location string, createdAt int64) (int64, error) {
+	result, err := DB().Exec(
+		`INSERT INTO signons (campaign_id, name, email, location, created_at) VALUES (?1, ?2, ?3, ?4, ?5)`,
+		campaignID, name, email, location, createdAt,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert signon: %w", err)
@@ -25,11 +25,11 @@ func (DBSignonStore) Insert(name, email, location string, createdAt int64) (int6
 	return result.LastInsertId()
 }
 
-func (DBSignonStore) GetByID(id int64) (*service.Signon, error) {
+func (DBSignonStore) GetByID(campaignID string, id int64) (*service.Signon, error) {
 	var s service.Signon
-	err := db.QueryRow(
-		`SELECT id, name, email, location, created_at FROM signons WHERE id = ?1`,
-		id,
+	err := DB().QueryRow(
+		`SELECT id, name, email, location, created_at FROM signons WHERE campaign_id = ?1 AND id = ?2`,
+		campaignID, id,
 	).Scan(&s.ID, &s.Name, &s.Email, &s.Location, &s.CreatedAt)
 
 	if err == sql.ErrNoRows {
@@ -41,10 +41,10 @@ func (DBSignonStore) GetByID(id int64) (*service.Signon, error) {
 	return &s, nil
 }
 
-func (DBSignonStore) List(limit, offset int) ([]*service.Signon, error) {
-	rows, err := db.Query(
-		`SELECT id, name, email, location, created_at FROM signons ORDER BY created_at DESC LIMIT ?1 OFFSET ?2`,
-		limit, offset,
+func (DBSignonStore) List(campaignID string, limit, offset int) ([]*service.Signon, error) {
+	rows, err := DB().Query(
+		`SELECT id, name, email, location, created_at FROM signons WHERE campaign_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3`,
+		campaignID, limit, offset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list signons: %w", err)
@@ -67,17 +67,17 @@ func (DBSignonStore) List(limit, offset int) ([]*service.Signon, error) {
 	return signons, nil
 }
 
-func (DBSignonStore) Count() (int, error) {
+func (DBSignonStore) Count(campaignID string) (int, error) {
 	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM signons`).Scan(&count)
+	err := DB().QueryRow(`SELECT COUNT(*) FROM signons WHERE campaign_id = ?1`, campaignID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count signons: %w", err)
 	}
 	return count, nil
 }
 
-func (DBSignonStore) Delete(id int64) error {
-	result, err := db.Exec(`DELETE FROM signons WHERE id = ?1`, id)
+func (DBSignonStore) Delete(campaignID string, id int64) error {
+	result, err := DB().Exec(`DELETE FROM signons WHERE campaign_id = ?1 AND id = ?2`, campaignID, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete signon: %w", err)
 	}
@@ -94,9 +94,9 @@ func (DBSignonStore) Delete(id int64) error {
 	return nil
 }
 
-func (DBSignonStore) EmailExists(email string) (bool, error) {
+func (DBSignonStore) EmailExists(campaignID, email string) (bool, error) {
 	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM signons WHERE email = ?1`, email).Scan(&count)
+	err := DB().QueryRow(`SELECT COUNT(*) FROM signons WHERE campaign_id = ?1 AND email = ?2`, campaignID, email).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to check email: %w", err)
 	}

@@ -6,60 +6,138 @@ import (
 	"testing"
 )
 
-// mockLocationConfigStore is a test implementation of LocationConfigStore
-type mockLocationConfigStoreImpl struct {
-	config  *service.LocationConfig
-	options []*service.LocationOption
-	err     error
+const testCampaignID = "test-campaign-id"
+
+// mockCampaignStore is a test implementation of CampaignStore
+type mockCampaignStore struct {
+	campaigns map[string]*service.Campaign
+	err       error
 }
 
-func newMockLocationConfigStoreImpl(allowCustom bool) *mockLocationConfigStoreImpl {
-	return &mockLocationConfigStoreImpl{
-		config:  &service.LocationConfig{AllowCustomText: allowCustom},
-		options: make([]*service.LocationOption, 0),
+func newMockCampaignStore() *mockCampaignStore {
+	return &mockCampaignStore{
+		campaigns: make(map[string]*service.Campaign),
 	}
 }
 
-func (m *mockLocationConfigStoreImpl) GetConfig() (*service.LocationConfig, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.config, nil
-}
-
-func (m *mockLocationConfigStoreImpl) SetAllowCustomText(allow bool) error {
+func (m *mockCampaignStore) Insert(id, name string, allowCustomText bool, createdAt int64) error {
 	if m.err != nil {
 		return m.err
 	}
-	m.config.AllowCustomText = allow
+	m.campaigns[id] = &service.Campaign{
+		ID:              id,
+		Name:            name,
+		AllowCustomText: allowCustomText,
+		CreatedAt:       createdAt,
+	}
 	return nil
 }
 
-func (m *mockLocationConfigStoreImpl) GetOptions() ([]*service.LocationOption, error) {
+func (m *mockCampaignStore) GetByID(id string) (*service.Campaign, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	return m.options, nil
+	campaign, ok := m.campaigns[id]
+	if !ok {
+		return nil, service.ErrCampaignNotFound
+	}
+	return campaign, nil
 }
 
-func (m *mockLocationConfigStoreImpl) AddOption(value string, displayOrder int) (int64, error) {
+func (m *mockCampaignStore) List(limit, offset int) ([]*service.Campaign, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	campaigns := make([]*service.Campaign, 0, len(m.campaigns))
+	for _, c := range m.campaigns {
+		campaigns = append(campaigns, c)
+	}
+	return campaigns, nil
+}
+
+func (m *mockCampaignStore) Count() (int, error) {
 	if m.err != nil {
 		return 0, m.err
 	}
-	id := int64(len(m.options) + 1)
-	m.options = append(m.options, &service.LocationOption{
-		ID:           id,
-		Value:        value,
-		DisplayOrder: displayOrder,
-	})
-	return id, nil
+	return len(m.campaigns), nil
 }
 
-func (m *mockLocationConfigStoreImpl) UpdateOption(id int64, value string, displayOrder int) error {
+func (m *mockCampaignStore) Update(id, name string, allowCustomText bool) error {
 	if m.err != nil {
 		return m.err
 	}
-	for _, opt := range m.options {
+	campaign, ok := m.campaigns[id]
+	if !ok {
+		return service.ErrCampaignNotFound
+	}
+	campaign.Name = name
+	campaign.AllowCustomText = allowCustomText
+	return nil
+}
+
+func (m *mockCampaignStore) Delete(id string) error {
+	if m.err != nil {
+		return m.err
+	}
+	if _, ok := m.campaigns[id]; !ok {
+		return service.ErrCampaignNotFound
+	}
+	delete(m.campaigns, id)
+	return nil
+}
+
+// mockLocationOptionStore is a test implementation of LocationOptionStore
+type mockLocationOptionStore struct {
+	options map[string][]*service.LocationOption // keyed by campaignID
+	nextID  int64
+	err     error
+}
+
+func newMockLocationOptionStore() *mockLocationOptionStore {
+	return &mockLocationOptionStore{
+		options: make(map[string][]*service.LocationOption),
+		nextID:  1,
+	}
+}
+
+func (m *mockLocationOptionStore) GetOptions(campaignID string) ([]*service.LocationOption, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	opts, ok := m.options[campaignID]
+	if !ok {
+		return []*service.LocationOption{}, nil
+	}
+	return opts, nil
+}
+
+func (m *mockLocationOptionStore) AddOption(campaignID, value string, displayOrder int) (int64, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	id := m.nextID
+	m.nextID++
+
+	opt := &service.LocationOption{
+		ID:           id,
+		Value:        value,
+		DisplayOrder: displayOrder,
+	}
+
+	m.options[campaignID] = append(m.options[campaignID], opt)
+	return id, nil
+}
+
+func (m *mockLocationOptionStore) UpdateOption(campaignID string, id int64, value string, displayOrder int) error {
+	if m.err != nil {
+		return m.err
+	}
+	opts, ok := m.options[campaignID]
+	if !ok {
+		return service.ErrLocationOptionNotFound
+	}
+
+	for _, opt := range opts {
 		if opt.ID == id {
 			opt.Value = value
 			opt.DisplayOrder = displayOrder
@@ -69,25 +147,36 @@ func (m *mockLocationConfigStoreImpl) UpdateOption(id int64, value string, displ
 	return service.ErrLocationOptionNotFound
 }
 
-func (m *mockLocationConfigStoreImpl) DeleteOption(id int64) error {
+func (m *mockLocationOptionStore) DeleteOption(campaignID string, id int64) error {
 	if m.err != nil {
 		return m.err
 	}
-	for i, opt := range m.options {
+	opts, ok := m.options[campaignID]
+	if !ok {
+		return service.ErrLocationOptionNotFound
+	}
+
+	for i, opt := range opts {
 		if opt.ID == id {
-			m.options = append(m.options[:i], m.options[i+1:]...)
+			m.options[campaignID] = append(opts[:i], opts[i+1:]...)
 			return nil
 		}
 	}
 	return service.ErrLocationOptionNotFound
 }
 
+// Helper to set up test campaign
+func setupTestCampaign(campaignStore *mockCampaignStore, allowCustomText bool) {
+	campaignStore.Insert(testCampaignID, "Test Campaign", allowCustomText, 1234567890)
+}
+
 // Test GetLocationConfig - happy path
 func TestGetLocationConfigHappyPath(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	service.SetLocationConfigStore(store)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
 
-	config, err := service.GetLocationConfig()
+	config, err := service.GetLocationConfig(testCampaignID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -102,40 +191,40 @@ func TestGetLocationConfigHappyPath(t *testing.T) {
 
 // Test GetLocationConfig - no store
 func TestGetLocationConfigNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+	service.SetCampaignStore(nil)
 
-	_, err := service.GetLocationConfig()
+	_, err := service.GetLocationConfig(testCampaignID)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoCampaignStore {
+		t.Errorf("Expected ErrNoCampaignStore, got %v", err)
 	}
 }
 
-// Test GetLocationConfig - store error
-func TestGetLocationConfigStoreError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	store.err = errors.New("database error")
-	service.SetLocationConfigStore(store)
+// Test GetLocationConfig - campaign not found
+func TestGetLocationConfigCampaignNotFound(t *testing.T) {
+	campaignStore := newMockCampaignStore()
+	service.SetCampaignStore(campaignStore)
 
-	_, err := service.GetLocationConfig()
+	_, err := service.GetLocationConfig("nonexistent")
 
-	if !errors.Is(err, store.err) {
-		t.Errorf("Expected database error, got %v", err)
+	if err != service.ErrCampaignNotFound {
+		t.Errorf("Expected ErrCampaignNotFound, got %v", err)
 	}
 }
 
 // Test SetAllowCustomText - enable
 func TestSetAllowCustomTextEnable(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, false)
+	service.SetCampaignStore(campaignStore)
 
-	err := service.SetAllowCustomText(true)
+	err := service.SetAllowCustomText(testCampaignID, true)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	config, _ := service.GetLocationConfig()
+	config, _ := service.GetLocationConfig(testCampaignID)
 	if !config.AllowCustomText {
 		t.Error("Expected AllowCustomText to be updated to true")
 	}
@@ -143,16 +232,17 @@ func TestSetAllowCustomTextEnable(t *testing.T) {
 
 // Test SetAllowCustomText - disable
 func TestSetAllowCustomTextDisable(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	service.SetLocationConfigStore(store)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
 
-	err := service.SetAllowCustomText(false)
+	err := service.SetAllowCustomText(testCampaignID, false)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	config, _ := service.GetLocationConfig()
+	config, _ := service.GetLocationConfig(testCampaignID)
 	if config.AllowCustomText {
 		t.Error("Expected AllowCustomText to be updated to false")
 	}
@@ -160,36 +250,35 @@ func TestSetAllowCustomTextDisable(t *testing.T) {
 
 // Test SetAllowCustomText - no store
 func TestSetAllowCustomTextNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+	service.SetCampaignStore(nil)
 
-	err := service.SetAllowCustomText(true)
+	err := service.SetAllowCustomText(testCampaignID, true)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoCampaignStore {
+		t.Errorf("Expected ErrNoCampaignStore, got %v", err)
 	}
 }
 
-// Test SetAllowCustomText - store error
-func TestSetAllowCustomTextStoreError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	store.err = errors.New("database error")
-	service.SetLocationConfigStore(store)
+// Test SetAllowCustomText - campaign not found
+func TestSetAllowCustomTextCampaignNotFound(t *testing.T) {
+	campaignStore := newMockCampaignStore()
+	service.SetCampaignStore(campaignStore)
 
-	err := service.SetAllowCustomText(false)
+	err := service.SetAllowCustomText("nonexistent", true)
 
-	if !errors.Is(err, store.err) {
-		t.Errorf("Expected database error, got %v", err)
+	if err != service.ErrCampaignNotFound {
+		t.Errorf("Expected ErrCampaignNotFound, got %v", err)
 	}
 }
 
 // Test GetLocationOptions - happy path
 func TestGetLocationOptionsHappyPath(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	store.AddOption("New York", 1)
-	store.AddOption("Boston", 2)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	optionStore.AddOption(testCampaignID, "New York", 1)
+	optionStore.AddOption(testCampaignID, "Boston", 2)
+	service.SetLocationOptionStore(optionStore)
 
-	options, err := service.GetLocationOptions()
+	options, err := service.GetLocationOptions(testCampaignID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -201,10 +290,10 @@ func TestGetLocationOptionsHappyPath(t *testing.T) {
 
 // Test GetLocationOptions - empty list
 func TestGetLocationOptionsEmpty(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	options, err := service.GetLocationOptions()
+	options, err := service.GetLocationOptions(testCampaignID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -216,21 +305,21 @@ func TestGetLocationOptionsEmpty(t *testing.T) {
 
 // Test GetLocationOptions - no store
 func TestGetLocationOptionsNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+	service.SetLocationOptionStore(nil)
 
-	_, err := service.GetLocationOptions()
+	_, err := service.GetLocationOptions(testCampaignID)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoLocationOptionStore {
+		t.Errorf("Expected ErrNoLocationOptionStore, got %v", err)
 	}
 }
 
 // Test AddLocationOption - happy path
 func TestAddLocationOptionHappyPath(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, err := service.AddLocationOption("New York", 1)
+	id, err := service.AddLocationOption(testCampaignID, "New York", 1)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -239,7 +328,7 @@ func TestAddLocationOptionHappyPath(t *testing.T) {
 		t.Error("Expected non-zero ID")
 	}
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if len(options) != 1 {
 		t.Error("Expected option to be added")
 	}
@@ -247,10 +336,10 @@ func TestAddLocationOptionHappyPath(t *testing.T) {
 
 // Test AddLocationOption - empty value
 func TestAddLocationOptionEmptyValue(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	_, err := service.AddLocationOption("", 1)
+	_, err := service.AddLocationOption(testCampaignID, "", 1)
 
 	if err != service.ErrEmptyLocation {
 		t.Errorf("Expected ErrEmptyLocation, got %v", err)
@@ -259,11 +348,11 @@ func TestAddLocationOptionEmptyValue(t *testing.T) {
 
 // Test AddLocationOption - whitespace only value
 func TestAddLocationOptionWhitespaceOnly(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
 	// Note: value is not trimmed in AddLocationOption
-	id, err := service.AddLocationOption("   ", 1)
+	id, err := service.AddLocationOption(testCampaignID, "   ", 1)
 
 	// This should succeed (whitespace is preserved)
 	if err != nil {
@@ -276,19 +365,19 @@ func TestAddLocationOptionWhitespaceOnly(t *testing.T) {
 
 // Test AddLocationOption - no store
 func TestAddLocationOptionNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+	service.SetLocationOptionStore(nil)
 
-	_, err := service.AddLocationOption("New York", 1)
+	_, err := service.AddLocationOption(testCampaignID, "New York", 1)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoLocationOptionStore {
+		t.Errorf("Expected ErrNoLocationOptionStore, got %v", err)
 	}
 }
 
 // Test AddLocationOption - multiple options
 func TestAddLocationOptionMultiple(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
 	testCases := []struct {
 		value string
@@ -301,7 +390,7 @@ func TestAddLocationOptionMultiple(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		id, err := service.AddLocationOption(tc.value, tc.order)
+		id, err := service.AddLocationOption(testCampaignID, tc.value, tc.order)
 		if err != nil {
 			t.Errorf("Failed to add option %q: %v", tc.value, err)
 		}
@@ -310,7 +399,7 @@ func TestAddLocationOptionMultiple(t *testing.T) {
 		}
 	}
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if len(options) != 4 {
 		t.Errorf("Expected 4 options, got %d", len(options))
 	}
@@ -318,18 +407,18 @@ func TestAddLocationOptionMultiple(t *testing.T) {
 
 // Test UpdateLocationOption - happy path
 func TestUpdateLocationOptionHappyPath(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, _ := service.AddLocationOption("New York", 1)
+	id, _ := service.AddLocationOption(testCampaignID, "New York", 1)
 
-	err := service.UpdateLocationOption(id, "New York City", 1)
+	err := service.UpdateLocationOption(testCampaignID, id, "New York City", 1)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if len(options) != 1 || options[0].Value != "New York City" {
 		t.Error("Expected option to be updated")
 	}
@@ -337,12 +426,12 @@ func TestUpdateLocationOptionHappyPath(t *testing.T) {
 
 // Test UpdateLocationOption - empty value
 func TestUpdateLocationOptionEmptyValue(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, _ := service.AddLocationOption("New York", 1)
+	id, _ := service.AddLocationOption(testCampaignID, "New York", 1)
 
-	err := service.UpdateLocationOption(id, "", 1)
+	err := service.UpdateLocationOption(testCampaignID, id, "", 1)
 
 	if err != service.ErrEmptyLocation {
 		t.Errorf("Expected ErrEmptyLocation, got %v", err)
@@ -351,10 +440,10 @@ func TestUpdateLocationOptionEmptyValue(t *testing.T) {
 
 // Test UpdateLocationOption - nonexistent option
 func TestUpdateLocationOptionNonexistent(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	err := service.UpdateLocationOption(999, "New York", 1)
+	err := service.UpdateLocationOption(testCampaignID, 999, "New York", 1)
 
 	if err != service.ErrLocationOptionNotFound {
 		t.Errorf("Expected ErrLocationOptionNotFound, got %v", err)
@@ -363,29 +452,29 @@ func TestUpdateLocationOptionNonexistent(t *testing.T) {
 
 // Test UpdateLocationOption - no store
 func TestUpdateLocationOptionNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+	service.SetLocationOptionStore(nil)
 
-	err := service.UpdateLocationOption(1, "New York", 1)
+	err := service.UpdateLocationOption(testCampaignID, 1, "New York", 1)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoLocationOptionStore {
+		t.Errorf("Expected ErrNoLocationOptionStore, got %v", err)
 	}
 }
 
 // Test UpdateLocationOption - change display order
 func TestUpdateLocationOptionChangeOrder(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, _ := service.AddLocationOption("New York", 1)
+	id, _ := service.AddLocationOption(testCampaignID, "New York", 1)
 
-	err := service.UpdateLocationOption(id, "New York", 5)
+	err := service.UpdateLocationOption(testCampaignID, id, "New York", 5)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if options[0].DisplayOrder != 5 {
 		t.Error("Expected display order to be updated")
 	}
@@ -393,18 +482,18 @@ func TestUpdateLocationOptionChangeOrder(t *testing.T) {
 
 // Test DeleteLocationOption - happy path
 func TestDeleteLocationOptionHappyPath(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, _ := service.AddLocationOption("New York", 1)
+	id, _ := service.AddLocationOption(testCampaignID, "New York", 1)
 
-	err := service.DeleteLocationOption(id)
+	err := service.DeleteLocationOption(testCampaignID, id)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if len(options) != 0 {
 		t.Error("Expected option to be deleted")
 	}
@@ -412,10 +501,10 @@ func TestDeleteLocationOptionHappyPath(t *testing.T) {
 
 // Test DeleteLocationOption - nonexistent option
 func TestDeleteLocationOptionNonexistent(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	err := service.DeleteLocationOption(999)
+	err := service.DeleteLocationOption(testCampaignID, 999)
 
 	if err != service.ErrLocationOptionNotFound {
 		t.Errorf("Expected ErrLocationOptionNotFound, got %v", err)
@@ -424,27 +513,27 @@ func TestDeleteLocationOptionNonexistent(t *testing.T) {
 
 // Test DeleteLocationOption - no store
 func TestDeleteLocationOptionNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+	service.SetLocationOptionStore(nil)
 
-	err := service.DeleteLocationOption(1)
+	err := service.DeleteLocationOption(testCampaignID, 1)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoLocationOptionStore {
+		t.Errorf("Expected ErrNoLocationOptionStore, got %v", err)
 	}
 }
 
 // Test DeleteLocationOption - multiple options
 func TestDeleteLocationOptionMultiple(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	_, _ = service.AddLocationOption("New York", 1)
-	id2, _ := service.AddLocationOption("Boston", 2)
-	_, _ = service.AddLocationOption("Chicago", 3)
+	_, _ = service.AddLocationOption(testCampaignID, "New York", 1)
+	id2, _ := service.AddLocationOption(testCampaignID, "Boston", 2)
+	_, _ = service.AddLocationOption(testCampaignID, "Chicago", 3)
 
-	service.DeleteLocationOption(id2)
+	service.DeleteLocationOption(testCampaignID, id2)
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if len(options) != 2 {
 		t.Errorf("Expected 2 options after deletion, got %d", len(options))
 	}
@@ -463,12 +552,16 @@ func TestDeleteLocationOptionMultiple(t *testing.T) {
 
 // Test GetLocationConfigWithOptions - happy path
 func TestGetLocationConfigWithOptionsHappyPath(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	store.AddOption("New York", 1)
-	store.AddOption("Boston", 2)
-	service.SetLocationConfigStore(store)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
 
-	config, options, err := service.GetLocationConfigWithOptions()
+	optionStore := newMockLocationOptionStore()
+	optionStore.AddOption(testCampaignID, "New York", 1)
+	optionStore.AddOption(testCampaignID, "Boston", 2)
+	service.SetLocationOptionStore(optionStore)
+
+	config, options, err := service.GetLocationConfigWithOptions(testCampaignID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -486,10 +579,14 @@ func TestGetLocationConfigWithOptionsHappyPath(t *testing.T) {
 
 // Test GetLocationConfigWithOptions - no options
 func TestGetLocationConfigWithOptionsNoOptions(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, false)
+	service.SetCampaignStore(campaignStore)
 
-	config, options, err := service.GetLocationConfigWithOptions()
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
+
+	config, options, err := service.GetLocationConfigWithOptions(testCampaignID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -502,100 +599,111 @@ func TestGetLocationConfigWithOptionsNoOptions(t *testing.T) {
 	}
 }
 
-// Test GetLocationConfigWithOptions - no store
-func TestGetLocationConfigWithOptionsNoStore(t *testing.T) {
-	service.SetLocationConfigStore(nil)
+// Test GetLocationConfigWithOptions - no campaign store
+func TestGetLocationConfigWithOptionsNoCampaignStore(t *testing.T) {
+	service.SetCampaignStore(nil)
+	service.SetLocationOptionStore(newMockLocationOptionStore())
 
-	_, _, err := service.GetLocationConfigWithOptions()
+	_, _, err := service.GetLocationConfigWithOptions(testCampaignID)
 
-	if err != service.ErrNoLocationConfigStore {
-		t.Errorf("Expected ErrNoLocationConfigStore, got %v", err)
+	if err != service.ErrNoCampaignStore {
+		t.Errorf("Expected ErrNoCampaignStore, got %v", err)
 	}
 }
 
-// Test GetLocationConfigWithOptions - config error
-func TestGetLocationConfigWithOptionsConfigError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	// Simulate error on GetConfig
-	oldErr := store.err
-	store.err = errors.New("config error")
-	service.SetLocationConfigStore(store)
+// Test GetLocationConfigWithOptions - no option store
+func TestGetLocationConfigWithOptionsNoOptionStore(t *testing.T) {
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	_, _, err := service.GetLocationConfigWithOptions()
+	_, _, err := service.GetLocationConfigWithOptions(testCampaignID)
 
-	if !errors.Is(err, store.err) {
-		t.Errorf("Expected config error, got %v", err)
+	if err != service.ErrNoLocationOptionStore {
+		t.Errorf("Expected ErrNoLocationOptionStore, got %v", err)
 	}
+}
 
-	store.err = oldErr
+// Test GetLocationConfigWithOptions - campaign not found
+func TestGetLocationConfigWithOptionsCampaignNotFound(t *testing.T) {
+	campaignStore := newMockCampaignStore()
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(newMockLocationOptionStore())
+
+	_, _, err := service.GetLocationConfigWithOptions("nonexistent")
+
+	if err != service.ErrCampaignNotFound {
+		t.Errorf("Expected ErrCampaignNotFound, got %v", err)
+	}
 }
 
 // Test AddLocationOption - store error
 func TestAddLocationOptionStoreError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	store.err = errors.New("database error")
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	optionStore.err = errors.New("database error")
+	service.SetLocationOptionStore(optionStore)
 
-	_, err := service.AddLocationOption("New York", 1)
+	_, err := service.AddLocationOption(testCampaignID, "New York", 1)
 
-	if !errors.Is(err, store.err) {
+	if !errors.Is(err, optionStore.err) {
 		t.Errorf("Expected database error, got %v", err)
 	}
 }
 
 // Test UpdateLocationOption - store error
 func TestUpdateLocationOptionStoreError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, _ := service.AddLocationOption("New York", 1)
+	id, _ := service.AddLocationOption(testCampaignID, "New York", 1)
 
 	// Now set error
-	store.err = errors.New("database error")
+	optionStore.err = errors.New("database error")
 
-	err := service.UpdateLocationOption(id, "Boston", 2)
+	err := service.UpdateLocationOption(testCampaignID, id, "Boston", 2)
 
-	if !errors.Is(err, store.err) {
+	if !errors.Is(err, optionStore.err) {
 		t.Errorf("Expected database error, got %v", err)
 	}
 }
 
 // Test DeleteLocationOption - store error
 func TestDeleteLocationOptionStoreError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
-	id, _ := service.AddLocationOption("New York", 1)
+	id, _ := service.AddLocationOption(testCampaignID, "New York", 1)
 
 	// Now set error
-	store.err = errors.New("database error")
+	optionStore.err = errors.New("database error")
 
-	err := service.DeleteLocationOption(id)
+	err := service.DeleteLocationOption(testCampaignID, id)
 
-	if !errors.Is(err, store.err) {
+	if !errors.Is(err, optionStore.err) {
 		t.Errorf("Expected database error, got %v", err)
 	}
 }
 
 // Test location option workflow
 func TestLocationOptionWorkflow(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(false)
-	service.SetLocationConfigStore(store)
+	optionStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(optionStore)
 
 	// Add options
-	id1, _ := service.AddLocationOption("New York", 1)
-	id2, _ := service.AddLocationOption("Boston", 2)
-	_, _ = service.AddLocationOption("Chicago", 3)
+	id1, _ := service.AddLocationOption(testCampaignID, "New York", 1)
+	id2, _ := service.AddLocationOption(testCampaignID, "Boston", 2)
+	_, _ = service.AddLocationOption(testCampaignID, "Chicago", 3)
 
-	options, _ := service.GetLocationOptions()
+	options, _ := service.GetLocationOptions(testCampaignID)
 	if len(options) != 3 {
 		t.Errorf("Expected 3 options, got %d", len(options))
 	}
 
 	// Update one
-	service.UpdateLocationOption(id2, "Boston Updated", 10)
+	service.UpdateLocationOption(testCampaignID, id2, "Boston Updated", 10)
 
-	options, _ = service.GetLocationOptions()
+	options, _ = service.GetLocationOptions(testCampaignID)
 	for _, opt := range options {
 		if opt.ID == id2 && opt.Value != "Boston Updated" {
 			t.Error("Expected option to be updated")
@@ -603,30 +711,10 @@ func TestLocationOptionWorkflow(t *testing.T) {
 	}
 
 	// Delete one
-	service.DeleteLocationOption(id1)
+	service.DeleteLocationOption(testCampaignID, id1)
 
-	options, _ = service.GetLocationOptions()
+	options, _ = service.GetLocationOptions(testCampaignID)
 	if len(options) != 2 {
 		t.Errorf("Expected 2 options after delete, got %d", len(options))
-	}
-}
-
-// Test GetLocationConfigWithOptions - options error propagation
-func TestGetLocationConfigWithOptionsOptionsError(t *testing.T) {
-	store := newMockLocationConfigStoreImpl(true)
-	service.SetLocationConfigStore(store)
-
-	// Add an option to test, then simulate error on subsequent GetOptions call
-	store.AddOption("New York", 1)
-
-	// This is a limitation of our mock - we can't easily simulate error after success
-	// But we can test that errors are propagated
-	config, options, err := service.GetLocationConfigWithOptions()
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if config == nil || len(options) != 1 {
-		t.Error("Expected valid config and options")
 	}
 }

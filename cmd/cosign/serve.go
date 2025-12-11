@@ -81,8 +81,9 @@ var serveCmd = &args.Command{
 		}
 
 		// Inject stores into service layer
+	service.SetCampaignStore(database.NewCampaignStore())
 		service.SetSignonStore(database.NewSignonStore())
-		service.SetLocationConfigStore(database.NewLocationConfigStore())
+		service.SetLocationOptionStore(database.NewLocationOptionStore())
 		service.SetKeyStore(database.NewKeyStore())
 		service.SetCORSStore(database.NewCORSStore())
 

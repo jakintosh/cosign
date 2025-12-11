@@ -6,58 +6,75 @@ import (
 	"testing"
 )
 
+const testCampaignIDSignon = "test-campaign-id"
+
 // mockSignonStore is a test implementation of SignonStore
 type mockSignonStore struct {
-	signons map[int64]*service.Signon
-	emails  map[string]bool
+	signons map[string]map[int64]*service.Signon // campaignID -> id -> signon
+	emails  map[string]map[string]bool            // campaignID -> email -> exists
 	nextID  int64
 	err     error // error to return on any operation
 }
 
 func newMockSignonStore() *mockSignonStore {
 	return &mockSignonStore{
-		signons: make(map[int64]*service.Signon),
-		emails:  make(map[string]bool),
+		signons: make(map[string]map[int64]*service.Signon),
+		emails:  make(map[string]map[string]bool),
 		nextID:  1,
 	}
 }
 
-func (m *mockSignonStore) Insert(name, email, location string, createdAt int64) (int64, error) {
+func (m *mockSignonStore) Insert(campaignID, name, email, location string, createdAt int64) (int64, error) {
 	if m.err != nil {
 		return 0, m.err
 	}
+	if m.signons[campaignID] == nil {
+		m.signons[campaignID] = make(map[int64]*service.Signon)
+	}
+	if m.emails[campaignID] == nil {
+		m.emails[campaignID] = make(map[string]bool)
+	}
+
 	id := m.nextID
 	m.nextID++
-	m.signons[id] = &service.Signon{
+	m.signons[campaignID][id] = &service.Signon{
 		ID:        id,
 		Name:      name,
 		Email:     email,
 		Location:  location,
 		CreatedAt: createdAt,
 	}
-	m.emails[email] = true
+	m.emails[campaignID][email] = true
 	return id, nil
 }
 
-func (m *mockSignonStore) GetByID(id int64) (*service.Signon, error) {
+func (m *mockSignonStore) GetByID(campaignID string, id int64) (*service.Signon, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	signon, exists := m.signons[id]
+	if m.signons[campaignID] == nil {
+		return nil, service.ErrSignonNotFound
+	}
+	signon, exists := m.signons[campaignID][id]
 	if !exists {
 		return nil, service.ErrSignonNotFound
 	}
 	return signon, nil
 }
 
-func (m *mockSignonStore) List(limit, offset int) ([]*service.Signon, error) {
+func (m *mockSignonStore) List(campaignID string, limit, offset int) ([]*service.Signon, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	var signons []*service.Signon
-	for i := 0; i < len(m.signons); i++ {
-		signons = append(signons, m.signons[int64(i+1)])
+	if m.signons[campaignID] == nil {
+		return []*service.Signon{}, nil
 	}
+
+	var signons []*service.Signon
+	for _, s := range m.signons[campaignID] {
+		signons = append(signons, s)
+	}
+
 	// Simple pagination
 	if offset >= len(signons) {
 		return []*service.Signon{}, nil
@@ -66,116 +83,54 @@ func (m *mockSignonStore) List(limit, offset int) ([]*service.Signon, error) {
 	return signons[offset:end], nil
 }
 
-func (m *mockSignonStore) Count() (int, error) {
+func (m *mockSignonStore) Count(campaignID string) (int, error) {
 	if m.err != nil {
 		return 0, m.err
 	}
-	return len(m.signons), nil
+	if m.signons[campaignID] == nil {
+		return 0, nil
+	}
+	return len(m.signons[campaignID]), nil
 }
 
-func (m *mockSignonStore) Delete(id int64) error {
+func (m *mockSignonStore) Delete(campaignID string, id int64) error {
 	if m.err != nil {
 		return m.err
 	}
-	signon, exists := m.signons[id]
+	if m.signons[campaignID] == nil {
+		return service.ErrSignonNotFound
+	}
+	signon, exists := m.signons[campaignID][id]
 	if !exists {
 		return service.ErrSignonNotFound
 	}
-	delete(m.signons, id)
-	delete(m.emails, signon.Email)
+	delete(m.signons[campaignID], id)
+	if m.emails[campaignID] != nil {
+		delete(m.emails[campaignID], signon.Email)
+	}
 	return nil
 }
 
-func (m *mockSignonStore) EmailExists(email string) (bool, error) {
+func (m *mockSignonStore) EmailExists(campaignID, email string) (bool, error) {
 	if m.err != nil {
 		return false, m.err
 	}
-	return m.emails[email], nil
-}
-
-// mockLocationConfigStore for testing location validation
-type mockLocationConfigStore struct {
-	config  *service.LocationConfig
-	options []*service.LocationOption
-	err     error
-}
-
-func newMockLocationConfigStore(allowCustom bool, options []*service.LocationOption) *mockLocationConfigStore {
-	return &mockLocationConfigStore{
-		config:  &service.LocationConfig{AllowCustomText: allowCustom},
-		options: options,
+	if m.emails[campaignID] == nil {
+		return false, nil
 	}
-}
-
-func (m *mockLocationConfigStore) GetConfig() (*service.LocationConfig, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.config, nil
-}
-
-func (m *mockLocationConfigStore) SetAllowCustomText(allow bool) error {
-	if m.err != nil {
-		return m.err
-	}
-	m.config.AllowCustomText = allow
-	return nil
-}
-
-func (m *mockLocationConfigStore) GetOptions() ([]*service.LocationOption, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.options, nil
-}
-
-func (m *mockLocationConfigStore) AddOption(value string, displayOrder int) (int64, error) {
-	if m.err != nil {
-		return 0, m.err
-	}
-	id := int64(len(m.options) + 1)
-	m.options = append(m.options, &service.LocationOption{
-		ID:           id,
-		Value:        value,
-		DisplayOrder: displayOrder,
-	})
-	return id, nil
-}
-
-func (m *mockLocationConfigStore) UpdateOption(id int64, value string, displayOrder int) error {
-	if m.err != nil {
-		return m.err
-	}
-	for _, opt := range m.options {
-		if opt.ID == id {
-			opt.Value = value
-			opt.DisplayOrder = displayOrder
-			return nil
-		}
-	}
-	return service.ErrLocationOptionNotFound
-}
-
-func (m *mockLocationConfigStore) DeleteOption(id int64) error {
-	if m.err != nil {
-		return m.err
-	}
-	for i, opt := range m.options {
-		if opt.ID == id {
-			m.options = append(m.options[:i], m.options[i+1:]...)
-			return nil
-		}
-	}
-	return service.ErrLocationOptionNotFound
+	return m.emails[campaignID][email], nil
 }
 
 // Test CreateSignon - happy path
 func TestCreateSignonHappyPath(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil) // Allow any location
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil) // Allow any location
 
-	signon, err := service.CreateSignon("John Doe", "john@example.com", "New York", false)
+	signon, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "New York", false)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -198,9 +153,12 @@ func TestCreateSignonHappyPath(t *testing.T) {
 func TestCreateSignonTrimsWhitespace(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	signon, err := service.CreateSignon("  Jane Doe  ", "  jane@example.com  ", "  Boston  ", false)
+	signon, err := service.CreateSignon(testCampaignIDSignon, "  Jane Doe  ", "  jane@example.com  ", "  Boston  ", false)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -221,7 +179,7 @@ func TestCreateSignonEmptyName(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	_, err := service.CreateSignon("", "john@example.com", "NYC", false)
+	_, err := service.CreateSignon(testCampaignIDSignon, "", "john@example.com", "NYC", false)
 
 	if err != service.ErrEmptyName {
 		t.Errorf("Expected ErrEmptyName, got %v", err)
@@ -233,7 +191,7 @@ func TestCreateSignonEmptyEmail(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	_, err := service.CreateSignon("John Doe", "", "NYC", false)
+	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "", "NYC", false)
 
 	if err != service.ErrEmptyEmail {
 		t.Errorf("Expected ErrEmptyEmail, got %v", err)
@@ -245,7 +203,7 @@ func TestCreateSignonEmptyLocation(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	_, err := service.CreateSignon("John Doe", "john@example.com", "", false)
+	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "", false)
 
 	if err != service.ErrEmptyLocation {
 		t.Errorf("Expected ErrEmptyLocation, got %v", err)
@@ -265,7 +223,7 @@ func TestCreateSignonInvalidEmailFormat(t *testing.T) {
 	}
 
 	for _, email := range testCases {
-		_, err := service.CreateSignon("John Doe", email, "NYC", false)
+		_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", email, "NYC", false)
 		if err != service.ErrInvalidEmail {
 			t.Errorf("Email %q: expected ErrInvalidEmail, got %v", email, err)
 		}
@@ -276,16 +234,19 @@ func TestCreateSignonInvalidEmailFormat(t *testing.T) {
 func TestCreateSignonDuplicateEmailNotAllowed(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
 	// Create first signon
-	_, err := service.CreateSignon("John Doe", "john@example.com", "NYC", false)
+	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 	if err != nil {
 		t.Fatalf("Failed to create first signon: %v", err)
 	}
 
 	// Try to create duplicate
-	_, err = service.CreateSignon("Jane Doe", "john@example.com", "Boston", false)
+	_, err = service.CreateSignon(testCampaignIDSignon, "Jane Doe", "john@example.com", "Boston", false)
 	if err != service.ErrDuplicateEmail {
 		t.Errorf("Expected ErrDuplicateEmail, got %v", err)
 	}
@@ -295,16 +256,19 @@ func TestCreateSignonDuplicateEmailNotAllowed(t *testing.T) {
 func TestCreateSignonDuplicateEmailAllowed(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
 	// Create first signon
-	_, err := service.CreateSignon("John Doe", "john@example.com", "NYC", true)
+	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", true)
 	if err != nil {
 		t.Fatalf("Failed to create first signon: %v", err)
 	}
 
 	// Create duplicate (should succeed)
-	signon, err := service.CreateSignon("Jane Doe", "john@example.com", "Boston", true)
+	signon, err := service.CreateSignon(testCampaignIDSignon, "Jane Doe", "john@example.com", "Boston", true)
 	if err != nil {
 		t.Errorf("Expected no error with allowDuplicates=true, got %v", err)
 	}
@@ -318,14 +282,17 @@ func TestCreateSignonLocationValidationWithPreset(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	locationStore := newMockLocationConfigStore(false, []*service.LocationOption{
-		{ID: 1, Value: "New York", DisplayOrder: 1},
-		{ID: 2, Value: "Boston", DisplayOrder: 2},
-	})
-	service.SetLocationConfigStore(locationStore)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, false) // Strict mode
+	service.SetCampaignStore(campaignStore)
+
+	locationStore := newMockLocationOptionStore()
+	locationStore.AddOption(testCampaignIDSignon, "New York", 1)
+	locationStore.AddOption(testCampaignIDSignon, "Boston", 2)
+	service.SetLocationOptionStore(locationStore)
 
 	// Valid preset location
-	signon, err := service.CreateSignon("John Doe", "john@example.com", "New York", false)
+	signon, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "New York", false)
 	if err != nil {
 		t.Errorf("Expected no error for valid preset location, got %v", err)
 	}
@@ -334,7 +301,7 @@ func TestCreateSignonLocationValidationWithPreset(t *testing.T) {
 	}
 
 	// Invalid custom location
-	_, err = service.CreateSignon("Jane Doe", "jane@example.com", "Chicago", false)
+	_, err = service.CreateSignon(testCampaignIDSignon, "Jane Doe", "jane@example.com", "Chicago", false)
 	if err != service.ErrLocationNotInOptions {
 		t.Errorf("Expected ErrLocationNotInOptions for custom location, got %v", err)
 	}
@@ -345,11 +312,15 @@ func TestCreateSignonLocationValidationCustomAllowed(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	locationStore := newMockLocationConfigStore(true, []*service.LocationOption{})
-	service.SetLocationConfigStore(locationStore)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true) // Custom text allowed
+	service.SetCampaignStore(campaignStore)
+
+	locationStore := newMockLocationOptionStore()
+	service.SetLocationOptionStore(locationStore)
 
 	// Custom location should be allowed
-	signon, err := service.CreateSignon("John Doe", "john@example.com", "Anywhere", false)
+	signon, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "Anywhere", false)
 	if err != nil {
 		t.Errorf("Expected no error when custom text allowed, got %v", err)
 	}
@@ -362,7 +333,7 @@ func TestCreateSignonLocationValidationCustomAllowed(t *testing.T) {
 func TestCreateSignonNoStore(t *testing.T) {
 	service.SetSignonStore(nil)
 
-	_, err := service.CreateSignon("John Doe", "john@example.com", "NYC", false)
+	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
 	if err != service.ErrNoSignonStore {
 		t.Errorf("Expected ErrNoSignonStore, got %v", err)
@@ -373,11 +344,14 @@ func TestCreateSignonNoStore(t *testing.T) {
 func TestGetSignonHappyPath(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	created, _ := service.CreateSignon("John Doe", "john@example.com", "NYC", false)
+	created, _ := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
-	signon, err := service.GetSignon(created.ID)
+	signon, err := service.GetSignon(testCampaignIDSignon, created.ID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -395,7 +369,7 @@ func TestGetSignonNotFound(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	_, err := service.GetSignon(999)
+	_, err := service.GetSignon(testCampaignIDSignon, 999)
 
 	if err != service.ErrSignonNotFound {
 		t.Errorf("Expected ErrSignonNotFound, got %v", err)
@@ -406,7 +380,7 @@ func TestGetSignonNotFound(t *testing.T) {
 func TestGetSignonNoStore(t *testing.T) {
 	service.SetSignonStore(nil)
 
-	_, err := service.GetSignon(1)
+	_, err := service.GetSignon(testCampaignIDSignon, 1)
 
 	if err != service.ErrNoSignonStore {
 		t.Errorf("Expected ErrNoSignonStore, got %v", err)
@@ -417,12 +391,15 @@ func TestGetSignonNoStore(t *testing.T) {
 func TestListSignonsHappyPath(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	service.CreateSignon("John Doe", "john@example.com", "NYC", false)
-	service.CreateSignon("Jane Doe", "jane@example.com", "Boston", false)
+	service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
+	service.CreateSignon(testCampaignIDSignon, "Jane Doe", "jane@example.com", "Boston", false)
 
-	signons, err := service.ListSignons(10, 0)
+	signons, err := service.ListSignons(testCampaignIDSignon, 10, 0)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -438,13 +415,13 @@ func TestListSignonsPaginationDefaults(t *testing.T) {
 	service.SetSignonStore(store)
 
 	// Test limit <= 0 defaults to 100
-	_, err := service.ListSignons(-1, 0)
+	_, err := service.ListSignons(testCampaignIDSignon, -1, 0)
 	if err != nil {
 		t.Errorf("Expected no error with negative limit, got %v", err)
 	}
 
 	// Test offset < 0 defaults to 0
-	_, err = service.ListSignons(10, -1)
+	_, err = service.ListSignons(testCampaignIDSignon, 10, -1)
 	if err != nil {
 		t.Errorf("Expected no error with negative offset, got %v", err)
 	}
@@ -454,7 +431,7 @@ func TestListSignonsPaginationDefaults(t *testing.T) {
 func TestListSignonsNoStore(t *testing.T) {
 	service.SetSignonStore(nil)
 
-	_, err := service.ListSignons(10, 0)
+	_, err := service.ListSignons(testCampaignIDSignon, 10, 0)
 
 	if err != service.ErrNoSignonStore {
 		t.Errorf("Expected ErrNoSignonStore, got %v", err)
@@ -465,12 +442,15 @@ func TestListSignonsNoStore(t *testing.T) {
 func TestCountSignonsHappyPath(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	service.CreateSignon("John Doe", "john@example.com", "NYC", false)
-	service.CreateSignon("Jane Doe", "jane@example.com", "Boston", false)
+	service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
+	service.CreateSignon(testCampaignIDSignon, "Jane Doe", "jane@example.com", "Boston", false)
 
-	count, err := service.CountSignons()
+	count, err := service.CountSignons(testCampaignIDSignon)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -485,7 +465,7 @@ func TestCountSignonsEmpty(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	count, err := service.CountSignons()
+	count, err := service.CountSignons(testCampaignIDSignon)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -499,7 +479,7 @@ func TestCountSignonsEmpty(t *testing.T) {
 func TestCountSignonsNoStore(t *testing.T) {
 	service.SetSignonStore(nil)
 
-	_, err := service.CountSignons()
+	_, err := service.CountSignons(testCampaignIDSignon)
 
 	if err != service.ErrNoSignonStore {
 		t.Errorf("Expected ErrNoSignonStore, got %v", err)
@@ -510,18 +490,21 @@ func TestCountSignonsNoStore(t *testing.T) {
 func TestDeleteSignonHappyPath(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	signon, _ := service.CreateSignon("John Doe", "john@example.com", "NYC", false)
+	signon, _ := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
-	err := service.DeleteSignon(signon.ID)
+	err := service.DeleteSignon(testCampaignIDSignon, signon.ID)
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
 	// Verify it's deleted
-	_, err = service.GetSignon(signon.ID)
+	_, err = service.GetSignon(testCampaignIDSignon, signon.ID)
 	if err != service.ErrSignonNotFound {
 		t.Errorf("Expected signon to be deleted, but GetSignon returned %v", err)
 	}
@@ -532,7 +515,7 @@ func TestDeleteSignonNotFound(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 
-	err := service.DeleteSignon(999)
+	err := service.DeleteSignon(testCampaignIDSignon, 999)
 
 	if err != service.ErrSignonNotFound {
 		t.Errorf("Expected ErrSignonNotFound, got %v", err)
@@ -543,7 +526,7 @@ func TestDeleteSignonNotFound(t *testing.T) {
 func TestDeleteSignonNoStore(t *testing.T) {
 	service.SetSignonStore(nil)
 
-	err := service.DeleteSignon(1)
+	err := service.DeleteSignon(testCampaignIDSignon, 1)
 
 	if err != service.ErrNoSignonStore {
 		t.Errorf("Expected ErrNoSignonStore, got %v", err)
@@ -554,7 +537,10 @@ func TestDeleteSignonNoStore(t *testing.T) {
 func TestCreateSignonValidEmailFormats(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
 	validEmails := []string{
 		"user@example.com",
@@ -565,7 +551,7 @@ func TestCreateSignonValidEmailFormats(t *testing.T) {
 	}
 
 	for i, email := range validEmails {
-		signon, err := service.CreateSignon("User"+string(rune(i)), email, "NYC", false)
+		signon, err := service.CreateSignon(testCampaignIDSignon, "User"+string(rune(i)), email, "NYC", false)
 		if err != nil {
 			t.Errorf("Email %q: expected no error, got %v", email, err)
 		}
@@ -580,9 +566,12 @@ func TestCreateSignonStoreError(t *testing.T) {
 	store := newMockSignonStore()
 	store.err = errors.New("database error")
 	service.SetSignonStore(store)
-	service.SetLocationConfigStore(nil)
+	campaignStore := newMockCampaignStore()
+	setupTestCampaign(campaignStore, true)
+	service.SetCampaignStore(campaignStore)
+	service.SetLocationOptionStore(nil)
 
-	_, err := service.CreateSignon("John Doe", "john@example.com", "NYC", false)
+	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
 	if !errors.Is(err, store.err) {
 		t.Errorf("Expected database error, got %v", err)

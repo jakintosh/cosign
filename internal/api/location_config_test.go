@@ -14,10 +14,11 @@ func TestGetLocationConfigSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://test-origin"}
-	result := get(router, "/api/v1/location-config", &resp, corsHeader)
+	result := get(router, "/api/v1/campaigns/"+campaignID+"/config", &resp, corsHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
@@ -47,10 +48,11 @@ func TestGetLocationConfigCORSForbidden(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var resp map[string]any
 	corsHeader := header{"Origin", "http://disallowed-origin"}
-	result := get(router, "/api/v1/location-config", &resp, corsHeader)
+	result := get(router, "/api/v1/campaigns/"+campaignID+"/config", &resp, corsHeader)
 
 	expectStatus(t, http.StatusForbidden, result)
 }
@@ -62,10 +64,11 @@ func TestGetLocationConfigAdminSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	var resp map[string]any
-	result := get(router, "/api/v1/admin/location-config", &resp, authHeader)
+	result := get(router, "/api/v1/admin/campaigns/"+campaignID+"/config", &resp, authHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
@@ -89,9 +92,10 @@ func TestGetLocationConfigAdminNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var resp map[string]any
-	result := get(router, "/api/v1/admin/location-config", &resp)
+	result := get(router, "/api/v1/admin/campaigns/"+campaignID+"/config", &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }
@@ -101,10 +105,11 @@ func TestUpdateLocationConfigEnableCustomText(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"allow_custom_text": true}`
-	result := put(router, "/api/v1/admin/location-config", body, nil, authHeader)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/config", body, nil, authHeader)
 
 	expectStatus(t, http.StatusNoContent, result)
 }
@@ -114,10 +119,11 @@ func TestUpdateLocationConfigDisableCustomText(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"allow_custom_text": false}`
-	result := put(router, "/api/v1/admin/location-config", body, nil, authHeader)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/config", body, nil, authHeader)
 
 	expectStatus(t, http.StatusNoContent, result)
 }
@@ -127,10 +133,11 @@ func TestUpdateLocationConfigInvalidJSON(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{invalid json`
-	result := put(router, "/api/v1/admin/location-config", body, nil, authHeader)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/config", body, nil, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -140,9 +147,10 @@ func TestUpdateLocationConfigNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{"allow_custom_text": true}`
-	result := put(router, "/api/v1/admin/location-config", body, nil)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/config", body, nil)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }
@@ -152,10 +160,11 @@ func TestListLocationOptionsSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	var resp map[string]any
-	result := get(router, "/api/v1/admin/location-config/options", &resp, authHeader)
+	result := get(router, "/api/v1/admin/campaigns/"+campaignID+"/options", &resp, authHeader)
 
 	expectStatus(t, http.StatusOK, result)
 
@@ -181,9 +190,10 @@ func TestListLocationOptionsNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	var resp map[string]any
-	result := get(router, "/api/v1/admin/location-config/options", &resp)
+	result := get(router, "/api/v1/admin/campaigns/"+campaignID+"/options", &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }
@@ -193,11 +203,12 @@ func TestAddLocationOptionSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"value": "New York", "display_order": 1}`
 	var resp map[string]any
-	result := post(router, "/api/v1/admin/location-config/options", body, &resp, authHeader)
+	result := post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusCreated, result)
 
@@ -216,11 +227,12 @@ func TestAddLocationOptionEmptyValue(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"value": "", "display_order": 1}`
 	var resp map[string]any
-	result := post(router, "/api/v1/admin/location-config/options", body, &resp, authHeader)
+	result := post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -230,11 +242,12 @@ func TestAddLocationOptionInvalidJSON(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{invalid json`
 	var resp map[string]any
-	result := post(router, "/api/v1/admin/location-config/options", body, &resp, authHeader)
+	result := post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", body, &resp, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -244,10 +257,11 @@ func TestAddLocationOptionNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{"value": "New York", "display_order": 1}`
 	var resp map[string]any
-	result := post(router, "/api/v1/admin/location-config/options", body, &resp)
+	result := post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", body, &resp)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }
@@ -257,20 +271,21 @@ func TestUpdateLocationOptionSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 
 	// First add an option
 	addBody := `{"value": "New York", "display_order": 1}`
 	var addResp map[string]any
-	post(router, "/api/v1/admin/location-config/options", addBody, &addResp, authHeader)
+	post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", addBody, &addResp, authHeader)
 
 	addData, _ := addResp["data"].(map[string]any)
 	optionID := formatID(addData["id"])
 
 	// Update the option
 	updateBody := `{"value": "Boston", "display_order": 2}`
-	result := put(router, fmt.Sprintf("/api/v1/admin/location-config/options/%s", optionID), updateBody, nil, authHeader)
+	result := put(router, fmt.Sprintf("/api/v1/admin/campaigns/%s/options/%s", campaignID, optionID), updateBody, nil, authHeader)
 
 	expectStatus(t, http.StatusNoContent, result)
 }
@@ -280,10 +295,11 @@ func TestUpdateLocationOptionInvalidID(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"value": "Boston", "display_order": 2}`
-	result := put(router, "/api/v1/admin/location-config/options/invalid", body, nil, authHeader)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/options/invalid", body, nil, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -293,10 +309,11 @@ func TestUpdateLocationOptionNotFound(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{"value": "Boston", "display_order": 2}`
-	result := put(router, "/api/v1/admin/location-config/options/999", body, nil, authHeader)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/options/999", body, nil, authHeader)
 
 	expectStatus(t, http.StatusNotFound, result)
 }
@@ -306,20 +323,21 @@ func TestUpdateLocationOptionEmptyValue(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 
 	// First add an option
 	addBody := `{"value": "New York", "display_order": 1}`
 	var addResp map[string]any
-	post(router, "/api/v1/admin/location-config/options", addBody, &addResp, authHeader)
+	post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", addBody, &addResp, authHeader)
 
 	addData, _ := addResp["data"].(map[string]any)
 	optionID := formatID(addData["id"])
 
 	// Try to update with empty value
 	updateBody := `{"value": "", "display_order": 2}`
-	result := put(router, fmt.Sprintf("/api/v1/admin/location-config/options/%s", optionID), updateBody, nil, authHeader)
+	result := put(router, fmt.Sprintf("/api/v1/admin/campaigns/%s/options/%s", campaignID, optionID), updateBody, nil, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -329,10 +347,11 @@ func TestUpdateLocationOptionInvalidJSON(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 	body := `{invalid json`
-	result := put(router, "/api/v1/admin/location-config/options/1", body, nil, authHeader)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/options/1", body, nil, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -342,9 +361,10 @@ func TestUpdateLocationOptionNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	body := `{"value": "Boston", "display_order": 2}`
-	result := put(router, "/api/v1/admin/location-config/options/1", body, nil)
+	result := put(router, "/api/v1/admin/campaigns/"+campaignID+"/options/1", body, nil)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }
@@ -354,19 +374,20 @@ func TestDeleteLocationOptionSuccess(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
 
 	// First add an option
 	addBody := `{"value": "New York", "display_order": 1}`
 	var addResp map[string]any
-	post(router, "/api/v1/admin/location-config/options", addBody, &addResp, authHeader)
+	post(router, "/api/v1/admin/campaigns/"+campaignID+"/options", addBody, &addResp, authHeader)
 
 	addData, _ := addResp["data"].(map[string]any)
 	optionID := formatID(addData["id"])
 
 	// Delete the option
-	result := del(router, fmt.Sprintf("/api/v1/admin/location-config/options/%s", optionID), nil, authHeader)
+	result := del(router, fmt.Sprintf("/api/v1/admin/campaigns/%s/options/%s", campaignID, optionID), nil, authHeader)
 
 	expectStatus(t, http.StatusNoContent, result)
 }
@@ -376,9 +397,10 @@ func TestDeleteLocationOptionInvalidID(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
-	result := del(router, "/api/v1/admin/location-config/options/invalid", nil, authHeader)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/options/invalid", nil, authHeader)
 
 	expectStatus(t, http.StatusBadRequest, result)
 }
@@ -388,9 +410,10 @@ func TestDeleteLocationOptionNotFound(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
 	authHeader := makeTestAuthHeader(t)
-	result := del(router, "/api/v1/admin/location-config/options/999", nil, authHeader)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/options/999", nil, authHeader)
 
 	expectStatus(t, http.StatusNotFound, result)
 }
@@ -400,8 +423,9 @@ func TestDeleteLocationOptionNoAuth(t *testing.T) {
 
 	util.SetupTestDB(t)
 	router := setupRouter()
+	campaignID := createTestCampaign(t)
 
-	result := del(router, "/api/v1/admin/location-config/options/1", nil)
+	result := del(router, "/api/v1/admin/campaigns/"+campaignID+"/options/1", nil)
 
 	expectStatus(t, http.StatusUnauthorized, result)
 }

@@ -17,12 +17,12 @@ type Signon struct {
 
 // SignonStore interface for data operations
 type SignonStore interface {
-	Insert(name, email, location string, createdAt int64) (int64, error)
-	GetByID(id int64) (*Signon, error)
-	List(limit, offset int) ([]*Signon, error)
-	Count() (int, error)
-	Delete(id int64) error
-	EmailExists(email string) (bool, error)
+	Insert(campaignID, name, email, location string, createdAt int64) (int64, error)
+	GetByID(campaignID string, id int64) (*Signon, error)
+	List(campaignID string, limit, offset int) ([]*Signon, error)
+	Count(campaignID string) (int, error)
+	Delete(campaignID string, id int64) error
+	EmailExists(campaignID, email string) (bool, error)
 }
 
 var signonStore SignonStore
@@ -37,6 +37,7 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 
 // CreateSignon creates a new sign-on entry with validation
 func CreateSignon(
+	campaignID string,
 	name string,
 	email string,
 	location string,
@@ -68,7 +69,7 @@ func CreateSignon(
 
 	// Check for duplicate email if not allowed
 	if !allowDuplicates {
-		exists, err := signonStore.EmailExists(email)
+		exists, err := signonStore.EmailExists(campaignID, email)
 		if err != nil {
 			return nil, err
 		}
@@ -78,13 +79,13 @@ func CreateSignon(
 	}
 
 	// Validate location against configured options
-	if err := validateLocation(location); err != nil {
+	if err := validateLocation(campaignID, location); err != nil {
 		return nil, err
 	}
 
 	// Insert
 	createdAt := time.Now().Unix()
-	id, err := signonStore.Insert(name, email, location, createdAt)
+	id, err := signonStore.Insert(campaignID, name, email, location, createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -99,15 +100,15 @@ func CreateSignon(
 }
 
 // GetSignon retrieves a sign-on by ID
-func GetSignon(id int64) (*Signon, error) {
+func GetSignon(campaignID string, id int64) (*Signon, error) {
 	if signonStore == nil {
 		return nil, ErrNoSignonStore
 	}
-	return signonStore.GetByID(id)
+	return signonStore.GetByID(campaignID, id)
 }
 
 // ListSignons retrieves all sign-ons with pagination
-func ListSignons(limit, offset int) ([]*Signon, error) {
+func ListSignons(campaignID string, limit, offset int) ([]*Signon, error) {
 	if signonStore == nil {
 		return nil, ErrNoSignonStore
 	}
@@ -120,48 +121,48 @@ func ListSignons(limit, offset int) ([]*Signon, error) {
 		offset = 0
 	}
 
-	return signonStore.List(limit, offset)
+	return signonStore.List(campaignID, limit, offset)
 }
 
 // CountSignons returns the total number of sign-ons
-func CountSignons() (int, error) {
+func CountSignons(campaignID string) (int, error) {
 	if signonStore == nil {
 		return 0, ErrNoSignonStore
 	}
-	return signonStore.Count()
+	return signonStore.Count(campaignID)
 }
 
 // DeleteSignon removes a sign-on by ID
-func DeleteSignon(id int64) error {
+func DeleteSignon(campaignID string, id int64) error {
 	if signonStore == nil {
 		return ErrNoSignonStore
 	}
-	return signonStore.Delete(id)
+	return signonStore.Delete(campaignID, id)
 }
 
-// validateLocation checks if the location is valid based on current configuration
-func validateLocation(location string) error {
-	if locationConfigStore == nil {
-		// If no location config store, allow any location
+// validateLocation checks if the location is valid based on campaign configuration
+func validateLocation(campaignID, location string) error {
+	if campaignStore == nil {
+		// If no campaign store, allow any location
 		return nil
 	}
 
-	config, err := locationConfigStore.GetConfig()
+	campaign, err := campaignStore.GetByID(campaignID)
 	if err != nil {
-		// If config doesn't exist yet, allow any location
-		if err == ErrLocationConfigNotFound {
+		// If campaign doesn't exist, allow any location
+		if err == ErrCampaignNotFound {
 			return nil
 		}
 		return err
 	}
 
 	// If custom text is allowed, any location is valid
-	if config.AllowCustomText {
+	if campaign.AllowCustomText {
 		return nil
 	}
 
 	// Otherwise, location must be in the preset options
-	options, err := locationConfigStore.GetOptions()
+	options, err := locationOptionStore.GetOptions(campaignID)
 	if err != nil {
 		return err
 	}

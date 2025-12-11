@@ -8,6 +8,7 @@ var apiCmd = &args.Command{
 	Name: "api",
 	Help: "API client commands",
 	Subcommands: []*args.Command{
+		campaignsCmd,
 		signonsCmd,
 		locationCmd,
 		keysCmd,

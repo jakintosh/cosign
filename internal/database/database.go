@@ -70,6 +70,39 @@ var migrations = []migration{
 			);
 		`,
 	},
+	{
+		version: 6,
+		sql: `
+			CREATE TABLE IF NOT EXISTS campaigns (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				allow_custom_text INTEGER NOT NULL DEFAULT 1,
+				created_at INTEGER NOT NULL
+			);
+
+			ALTER TABLE signons ADD COLUMN campaign_id TEXT;
+			ALTER TABLE location_options ADD COLUMN campaign_id TEXT;
+
+			INSERT INTO campaigns (id, name, allow_custom_text, created_at)
+			SELECT
+				'00000000-0000-0000-0000-000000000000',
+				'Default Campaign',
+				COALESCE((SELECT allow_custom_text FROM location_config WHERE id = 1), 1),
+				COALESCE((SELECT MIN(created_at) FROM signons), strftime('%s', 'now'));
+
+			UPDATE signons SET campaign_id = '00000000-0000-0000-0000-000000000000' WHERE campaign_id IS NULL;
+			UPDATE location_options SET campaign_id = '00000000-0000-0000-0000-000000000000' WHERE campaign_id IS NULL;
+		`,
+	},
+	{
+		version: 7,
+		sql: `
+			CREATE INDEX IF NOT EXISTS idx_signons_campaign_id ON signons(campaign_id);
+			CREATE INDEX IF NOT EXISTS idx_signons_campaign_email ON signons(campaign_id, email);
+			CREATE INDEX IF NOT EXISTS idx_location_options_campaign ON location_options(campaign_id);
+			DROP TABLE IF EXISTS location_config;
+		`,
+	},
 }
 
 // Init initializes the database connection and runs migrations

@@ -27,6 +27,11 @@ var signonsListCmd = &cmd.Command{
 		{Long: "offset", Type: cmd.OptionTypeParameter, Help: "Offset for pagination"},
 	},
 	Handler: func(input *cmd.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
 		limit := "100"
 		if l := input.GetParameter("limit"); l != nil {
 			limit = *l
@@ -36,7 +41,7 @@ var signonsListCmd = &cmd.Command{
 			offset = *o
 		}
 
-		path := fmt.Sprintf("/admin/signons?limit=%s&offset=%s", limit, offset)
+		path := fmt.Sprintf("/admin/campaigns/%s/signons?limit=%s&offset=%s", campaignID, limit, offset)
 
 		response := &struct {
 			Signons []struct {
@@ -63,6 +68,11 @@ var signonsExportCmd = &cmd.Command{
 		{Short: 'o', Long: "output", Type: cmd.OptionTypeParameter, Help: "Output file path"},
 	},
 	Handler: func(input *cmd.Input) error {
+		campaignID, err := getActiveCampaign(input)
+		if err != nil {
+			return err
+		}
+
 		output := "signons.csv"
 		if o := input.GetParameter("output"); o != nil {
 			output = *o
@@ -78,7 +88,8 @@ var signonsExportCmd = &cmd.Command{
 			} `json:"signons"`
 		}{}
 
-		if err := request(input, "GET", "/admin/signons", nil, response); err != nil {
+		path := fmt.Sprintf("/admin/campaigns/%s/signons", campaignID)
+		if err := request(input, "GET", path, nil, response); err != nil {
 			return err
 		}
 

@@ -12,93 +12,101 @@ type LocationOption struct {
 	DisplayOrder int    `json:"display_order"`
 }
 
-// LocationConfigStore interface for location configuration operations
-type LocationConfigStore interface {
-	GetConfig() (*LocationConfig, error)
-	SetAllowCustomText(allow bool) error
-	GetOptions() ([]*LocationOption, error)
-	AddOption(value string, displayOrder int) (int64, error)
-	UpdateOption(id int64, value string, displayOrder int) error
-	DeleteOption(id int64) error
+// LocationOptionStore interface for location option operations (config is now in Campaign)
+type LocationOptionStore interface {
+	GetOptions(campaignID string) ([]*LocationOption, error)
+	AddOption(campaignID, value string, displayOrder int) (int64, error)
+	UpdateOption(campaignID string, id int64, value string, displayOrder int) error
+	DeleteOption(campaignID string, id int64) error
 }
 
-var locationConfigStore LocationConfigStore
+var locationOptionStore LocationOptionStore
 
-// SetLocationConfigStore sets the location config store implementation
-func SetLocationConfigStore(s LocationConfigStore) {
-	locationConfigStore = s
+// SetLocationOptionStore sets the location option store implementation
+func SetLocationOptionStore(s LocationOptionStore) {
+	locationOptionStore = s
 }
 
-// GetLocationConfig retrieves the current location field configuration
-func GetLocationConfig() (*LocationConfig, error) {
-	if locationConfigStore == nil {
-		return nil, ErrNoLocationConfigStore
+// GetLocationConfig retrieves the current location field configuration for a campaign
+func GetLocationConfig(campaignID string) (*LocationConfig, error) {
+	if campaignStore == nil {
+		return nil, ErrNoCampaignStore
 	}
-	return locationConfigStore.GetConfig()
-}
 
-// SetAllowCustomText updates whether custom location text is allowed
-func SetAllowCustomText(allow bool) error {
-	if locationConfigStore == nil {
-		return ErrNoLocationConfigStore
+	campaign, err := campaignStore.GetByID(campaignID)
+	if err != nil {
+		return nil, err
 	}
-	return locationConfigStore.SetAllowCustomText(allow)
+
+	return &LocationConfig{
+		AllowCustomText: campaign.AllowCustomText,
+	}, nil
 }
 
-// GetLocationOptions retrieves all preset location options
-func GetLocationOptions() ([]*LocationOption, error) {
-	if locationConfigStore == nil {
-		return nil, ErrNoLocationConfigStore
+// SetAllowCustomText updates whether custom location text is allowed for a campaign
+func SetAllowCustomText(campaignID string, allow bool) error {
+	if campaignStore == nil {
+		return ErrNoCampaignStore
 	}
-	return locationConfigStore.GetOptions()
+
+	campaign, err := campaignStore.GetByID(campaignID)
+	if err != nil {
+		return err
+	}
+
+	return campaignStore.Update(campaignID, campaign.Name, allow)
 }
 
-// AddLocationOption adds a new preset location option
-func AddLocationOption(value string, displayOrder int) (int64, error) {
-	if locationConfigStore == nil {
-		return 0, ErrNoLocationConfigStore
+// GetLocationOptions retrieves all preset location options for a campaign
+func GetLocationOptions(campaignID string) ([]*LocationOption, error) {
+	if locationOptionStore == nil {
+		return nil, ErrNoLocationOptionStore
+	}
+	return locationOptionStore.GetOptions(campaignID)
+}
+
+// AddLocationOption adds a new preset location option to a campaign
+func AddLocationOption(campaignID, value string, displayOrder int) (int64, error) {
+	if locationOptionStore == nil {
+		return 0, ErrNoLocationOptionStore
 	}
 
 	if value == "" {
 		return 0, ErrEmptyLocation
 	}
 
-	return locationConfigStore.AddOption(value, displayOrder)
+	return locationOptionStore.AddOption(campaignID, value, displayOrder)
 }
 
 // UpdateLocationOption updates an existing location option
-func UpdateLocationOption(id int64, value string, displayOrder int) error {
-	if locationConfigStore == nil {
-		return ErrNoLocationConfigStore
+func UpdateLocationOption(campaignID string, id int64, value string, displayOrder int) error {
+	if locationOptionStore == nil {
+		return ErrNoLocationOptionStore
 	}
 
 	if value == "" {
 		return ErrEmptyLocation
 	}
 
-	return locationConfigStore.UpdateOption(id, value, displayOrder)
+	return locationOptionStore.UpdateOption(campaignID, id, value, displayOrder)
 }
 
 // DeleteLocationOption removes a preset location option
-func DeleteLocationOption(id int64) error {
-	if locationConfigStore == nil {
-		return ErrNoLocationConfigStore
+func DeleteLocationOption(campaignID string, id int64) error {
+	if locationOptionStore == nil {
+		return ErrNoLocationOptionStore
 	}
-	return locationConfigStore.DeleteOption(id)
+	return locationOptionStore.DeleteOption(campaignID, id)
 }
 
-// GetLocationConfigWithOptions returns both config and options together
-func GetLocationConfigWithOptions() (*LocationConfig, []*LocationOption, error) {
-	if locationConfigStore == nil {
-		return nil, nil, ErrNoLocationConfigStore
-	}
-
-	config, err := locationConfigStore.GetConfig()
+// GetLocationConfigWithOptions retrieves both config and options for a campaign
+func GetLocationConfigWithOptions(campaignID string) (*LocationConfig, []*LocationOption, error) {
+	config, err := GetLocationConfig(campaignID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	options, err := locationConfigStore.GetOptions()
+	options, err := GetLocationOptions(campaignID)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -207,6 +207,26 @@ cosign/
    - Users can enter any location string
    - Maximum flexibility, minimal structure
 
+### Working with Location Config and Options
+
+- **Defaults:** On first run the config is `allow_custom_text=true` with no options, so any location is accepted.
+- **Make it a strict dropdown:**
+  - Set `allow_custom_text` to false: `PUT /api/v1/admin/location-config {"allow_custom_text":false}` or `./cosign --key {admin} api location-config set --strict`
+  - Add options with order: `POST /api/v1/admin/location-config/options {"value":"New York, NY","display_order":1}` or `./cosign --key {admin} api location-options add "New York, NY" --order 1`
+  - Update/remove with `PUT/DELETE /api/v1/admin/location-config/options/{id}`; options are ordered by `display_order` ascending.
+- **Allow a dropdown + “Other”:** Keep options, but set `allow_custom_text` to true (`./cosign --key {admin} api location-config set --allow-custom`). Validation accepts either a preset value or any custom text.
+- **Front-end usage:** Before rendering a form, call the public endpoint `GET /api/v1/location-config` (CORS applies). The response shape is:
+  ```json
+  {
+    "config": {"allow_custom_text": true},
+    "options": [{"id":1,"value":"New York, NY","display_order":1}]
+  }
+  ```
+  - If `options` is non-empty, render them in a dropdown ordered by `display_order`.
+  - If `allow_custom_text` is true, include an “Other”/free-text input; if false, block custom entries.
+  - Submit sign-ons to `POST /api/v1/signons` with the chosen `location` value.
+- **CORS:** Add your form’s origin via admin CORS endpoints (`./cosign --key {admin} api cors add https://your-form.example`) so the browser can call the public config and sign-on endpoints.
+
 ### Rate Limiting
 
 Public endpoints are rate limited to:
