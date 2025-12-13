@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"cosign/internal/service"
 	cmd "git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
@@ -43,15 +44,7 @@ var signonsListCmd = &cmd.Command{
 
 		path := fmt.Sprintf("/admin/campaigns/%s/signons?limit=%s&offset=%s", campaignID, limit, offset)
 
-		response := &struct {
-			Signons []struct {
-				ID        int64  `json:"id"`
-				Name      string `json:"name"`
-				Email     string `json:"email"`
-				Location  string `json:"location"`
-				CreatedAt int64  `json:"created_at"`
-			} `json:"signons"`
-		}{}
+		response := &service.Signons{}
 
 		if err := request(input, "GET", path, nil, response); err != nil {
 			return err
@@ -78,15 +71,7 @@ var signonsExportCmd = &cmd.Command{
 			output = *o
 		}
 
-		response := &struct {
-			Signons []struct {
-				ID        int64  `json:"id"`
-				Name      string `json:"name"`
-				Email     string `json:"email"`
-				Location  string `json:"location"`
-				CreatedAt int64  `json:"created_at"`
-			} `json:"signons"`
-		}{}
+		response := &service.Signons{}
 
 		path := fmt.Sprintf("/admin/campaigns/%s/signons", campaignID)
 		if err := request(input, "GET", path, nil, response); err != nil {

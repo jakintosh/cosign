@@ -46,7 +46,7 @@ func TestSetAndGetAllowedOrigins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 2 || list[0].URL != "http://one" || list[1].URL != "https://two" {
+	if len(list.Origins) != 2 || list.Origins[0].URL != "http://one" || list.Origins[1].URL != "https://two" {
 		t.Fatalf("unexpected origins %+v", list)
 	}
 }

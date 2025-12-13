@@ -31,13 +31,9 @@ var keysCreateCmd = &args.Command{
 		}
 
 		body, _ := json.Marshal(payload)
-		response := &struct {
-			ID        string `json:"id"`
-			Secret    string `json:"secret"`
-			CreatedAt int64  `json:"created_at"`
-		}{}
+		var response string
 
-		if err := request(input, "POST", "/admin/keys", body, response); err != nil {
+		if err := request(input, "POST", "/admin/keys", body, &response); err != nil {
 			return err
 		}
 

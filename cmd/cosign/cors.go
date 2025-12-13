@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosign/internal/service"
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
@@ -21,10 +22,7 @@ var corsListCmd = &args.Command{
 	Name: "list",
 	Help: "List CORS origins",
 	Handler: func(input *args.Input) error {
-		response := &struct {
-			Origins []string `json:"origins"`
-		}{}
-
+		response := &service.AllowedOrigins{}
 		if err := request(input, "GET", "/admin/cors", nil, response); err != nil {
 			return err
 		}

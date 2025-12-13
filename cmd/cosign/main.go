@@ -105,22 +105,6 @@ func baseURLWithConfig(i *args.Input, cfg *envs.Config) string {
 	return DEFAULT_URL + "/api/v1"
 }
 
-// baseURL resolves the API base URL from options, environment, or config
-func baseURL(i *args.Input) string {
-	cfg, _ := envConfig(i)
-	return baseURLWithConfig(i, cfg)
-}
-
-// activeEnv uses execution environment info to determine which environment is active
-func activeEnv(
-	i *args.Input,
-) string {
-	if cfg, err := envConfig(i); err == nil && cfg.GetActiveEnv() != "" {
-		return cfg.GetActiveEnv()
-	}
-	return DEFAULT_ENV
-}
-
 // request makes an HTTP request and unmarshals the response
 func request[T any](
 	i *args.Input,

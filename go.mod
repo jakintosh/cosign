@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	git.sr.ht/~jakintosh/command-go v0.2.1
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	golang.org/x/time v0.14.0
 	modernc.org/sqlite v1.39.1
@@ -11,7 +12,6 @@ require (
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

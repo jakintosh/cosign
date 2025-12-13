@@ -27,11 +27,7 @@ func handleGetCORS(
 		writeError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
-	list := make([]string, 0, len(origins))
-	for _, o := range origins {
-		list = append(list, o.URL)
-	}
-	writeData(w, http.StatusOK, map[string]any{"origins": list})
+	writeData(w, http.StatusOK, origins)
 }
 
 func handlePostCORS(

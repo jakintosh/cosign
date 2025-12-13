@@ -8,6 +8,10 @@ type AllowedOrigin struct {
 	URL string `json:"url"`
 }
 
+type AllowedOrigins struct {
+	Origins []AllowedOrigin `json:"origins"`
+}
+
 type CORSStore interface {
 	CountOrigins() (int, error)
 	GetOrigins() ([]AllowedOrigin, error)
@@ -52,19 +56,19 @@ func InitCORS(
 }
 
 func GetAllowedOrigins() (
-	[]AllowedOrigin,
+	AllowedOrigins,
 	error,
 ) {
 	if corsStore == nil {
-		return nil, ErrNoCORSStore
+		return AllowedOrigins{}, ErrNoCORSStore
 	}
 
 	origins, err := corsStore.GetOrigins()
 	if err != nil {
-		return nil, DatabaseError{err}
+		return AllowedOrigins{}, DatabaseError{err}
 	}
 
-	return origins, nil
+	return AllowedOrigins{Origins: origins}, nil
 }
 
 func SetAllowedOrigins(

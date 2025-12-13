@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"cosign/internal/service"
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
@@ -26,14 +27,7 @@ var campaignsListCmd = &args.Command{
 	Name: "list",
 	Help: "List all campaigns",
 	Handler: func(input *args.Input) error {
-		response := &struct {
-			Campaigns []struct {
-				ID              string `json:"id"`
-				Name            string `json:"name"`
-				AllowCustomText bool   `json:"allow_custom_text"`
-				CreatedAt       int64  `json:"created_at"`
-			} `json:"campaigns"`
-		}{}
+		response := &service.Campaigns{}
 
 		if err := request(input, "GET", "/admin/campaigns", nil, response); err != nil {
 			return err
@@ -118,12 +112,7 @@ var campaignsSelectCmd = &args.Command{
 		}
 
 		// Get campaign details to show name
-		response := &struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			AllowCustomText bool   `json:"allow_custom_text"`
-			CreatedAt       int64  `json:"created_at"`
-		}{}
+		response := &service.Campaign{}
 
 		if err := request(input, "GET", fmt.Sprintf("/admin/campaigns/%s", campaignID), nil, response); err != nil {
 			return err
@@ -158,12 +147,7 @@ var campaignsCreateCmd = &args.Command{
 		payload := map[string]string{"name": name}
 		body, _ := json.Marshal(payload)
 
-		response := &struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			AllowCustomText bool   `json:"allow_custom_text"`
-			CreatedAt       int64  `json:"created_at"`
-		}{}
+		response := &service.Campaign{}
 
 		if err := request(input, "POST", "/admin/campaigns", body, response); err != nil {
 			return err
@@ -189,12 +173,7 @@ var campaignsGetCmd = &args.Command{
 			}
 		}
 
-		response := &struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			AllowCustomText bool   `json:"allow_custom_text"`
-			CreatedAt       int64  `json:"created_at"`
-		}{}
+		response := &service.Campaign{}
 
 		if err := request(input, "GET", fmt.Sprintf("/admin/campaigns/%s", uuid), nil, response); err != nil {
 			return err
@@ -230,12 +209,7 @@ var campaignsUpdateCmd = &args.Command{
 
 		body, _ := json.Marshal(payload)
 
-		response := &struct {
-			ID              string `json:"id"`
-			Name            string `json:"name"`
-			AllowCustomText bool   `json:"allow_custom_text"`
-			CreatedAt       int64  `json:"created_at"`
-		}{}
+		response := &service.Campaign{}
 
 		if err := request(input, "PUT", fmt.Sprintf("/admin/campaigns/%s", uuid), body, response); err != nil {
 			return err

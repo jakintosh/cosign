@@ -11,7 +11,7 @@ const testCampaignIDSignon = "test-campaign-id"
 // mockSignonStore is a test implementation of SignonStore
 type mockSignonStore struct {
 	signons map[string]map[int64]*service.Signon // campaignID -> id -> signon
-	emails  map[string]map[string]bool            // campaignID -> email -> exists
+	emails  map[string]map[string]bool           // campaignID -> email -> exists
 	nextID  int64
 	err     error // error to return on any operation
 }
@@ -404,8 +404,11 @@ func TestListSignonsHappyPath(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
-	if len(signons) != 2 {
-		t.Errorf("Expected 2 signons, got %d", len(signons))
+	if len(signons.Signons) != 2 {
+		t.Errorf("Expected 2 signons, got %d", len(signons.Signons))
+	}
+	if signons.Total != 2 || signons.Limit != 10 || signons.Offset != 0 {
+		t.Errorf("Unexpected metadata %+v", signons)
 	}
 }
 
@@ -438,8 +441,8 @@ func TestListSignonsNoStore(t *testing.T) {
 	}
 }
 
-// Test CountSignons - happy path
-func TestCountSignonsHappyPath(t *testing.T) {
+// Test ListSignons includes total count
+func TestListSignonsIncludesTotal(t *testing.T) {
 	store := newMockSignonStore()
 	service.SetSignonStore(store)
 	campaignStore := newMockCampaignStore()
@@ -447,42 +450,23 @@ func TestCountSignonsHappyPath(t *testing.T) {
 	service.SetCampaignStore(campaignStore)
 	service.SetLocationOptionStore(nil)
 
+	resp, err := service.ListSignons(testCampaignIDSignon, 5, 0)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if resp.Total != 0 {
+		t.Errorf("Expected total 0, got %d", resp.Total)
+	}
+
 	service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 	service.CreateSignon(testCampaignIDSignon, "Jane Doe", "jane@example.com", "Boston", false)
 
-	count, err := service.CountSignons(testCampaignIDSignon)
-
+	resp, err = service.ListSignons(testCampaignIDSignon, 5, 0)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
-	if count != 2 {
-		t.Errorf("Expected count 2, got %d", count)
-	}
-}
-
-// Test CountSignons - empty
-func TestCountSignonsEmpty(t *testing.T) {
-	store := newMockSignonStore()
-	service.SetSignonStore(store)
-
-	count, err := service.CountSignons(testCampaignIDSignon)
-
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if count != 0 {
-		t.Errorf("Expected count 0, got %d", count)
-	}
-}
-
-// Test CountSignons - no store
-func TestCountSignonsNoStore(t *testing.T) {
-	service.SetSignonStore(nil)
-
-	_, err := service.CountSignons(testCampaignIDSignon)
-
-	if err != service.ErrNoSignonStore {
-		t.Errorf("Expected ErrNoSignonStore, got %v", err)
+	if resp.Total != 2 {
+		t.Errorf("Expected total 2, got %d", resp.Total)
 	}
 }
 

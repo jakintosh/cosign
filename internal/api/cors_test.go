@@ -8,6 +8,23 @@ import (
 	"testing"
 )
 
+func extractOriginURLs(t *testing.T, data map[string]any) []string {
+	t.Helper()
+	origins, ok := data["origins"].([]any)
+	if !ok {
+		t.Fatalf("Expected origins field to be an array, got %T", data["origins"])
+	}
+	urls := make([]string, 0, len(origins))
+	for _, o := range origins {
+		if m, ok := o.(map[string]any); ok {
+			if url, ok := m["url"].(string); ok {
+				urls = append(urls, url)
+			}
+		}
+	}
+	return urls
+}
+
 // TestListCORSOriginsSuccess tests listing CORS origins with valid authentication
 func TestListCORSOriginsSuccess(t *testing.T) {
 
@@ -25,10 +42,7 @@ func TestListCORSOriginsSuccess(t *testing.T) {
 		t.Fatalf("Expected data field to be a map, got %T", resp["data"])
 	}
 
-	origins, ok := data["origins"].([]any)
-	if !ok {
-		t.Fatalf("Expected origins field to be an array, got %T", data["origins"])
-	}
+	origins := extractOriginURLs(t, data)
 
 	// Should have at least the test origin added during setup
 	if len(origins) == 0 {
@@ -65,12 +79,12 @@ func TestAddCORSOriginSuccess(t *testing.T) {
 	get(router, "/api/v1/admin/cors", &listResp, authHeader)
 
 	data, _ := listResp["data"].(map[string]any)
-	origins, _ := data["origins"].([]any)
+	origins := extractOriginURLs(t, data)
 
 	// Check that our origin is in the list
 	found := false
 	for _, o := range origins {
-		if origin, ok := o.(string); ok && origin == "https://example.com" {
+		if o == "https://example.com" {
 			found = true
 			break
 		}
@@ -142,11 +156,11 @@ func TestDeleteCORSOriginSuccess(t *testing.T) {
 	get(router, "/api/v1/admin/cors", &listResp, authHeader)
 
 	data, _ := listResp["data"].(map[string]any)
-	origins, _ := data["origins"].([]any)
+	origins := extractOriginURLs(t, data)
 
 	// Check that our origin is not in the list
 	for _, o := range origins {
-		if origin, ok := o.(string); ok && origin == testOrigin {
+		if o == testOrigin {
 			t.Errorf("Expected origin to be deleted, but found it in list")
 			return
 		}
@@ -202,7 +216,7 @@ func TestAddAndListMultipleCORSOrigins(t *testing.T) {
 	get(router, "/api/v1/admin/cors", &listResp, authHeader)
 
 	data, _ := listResp["data"].(map[string]any)
-	respOrigins, _ := data["origins"].([]any)
+	respOrigins := extractOriginURLs(t, data)
 
 	// Should have at least the test origin + our 3 origins = 4 total
 	if len(respOrigins) < 4 {
@@ -212,10 +226,8 @@ func TestAddAndListMultipleCORSOrigins(t *testing.T) {
 	// Verify all our origins are present
 	foundCount := 0
 	for _, o := range respOrigins {
-		if origin, ok := o.(string); ok {
-			if slices.Contains(origins, origin) {
-				foundCount++
-			}
+		if slices.Contains(origins, o) {
+			foundCount++
 		}
 	}
 

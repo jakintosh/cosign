@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"cosign/internal/service"
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
@@ -34,9 +35,7 @@ var locationConfigGetCmd = &args.Command{
 			return err
 		}
 
-		response := &struct {
-			AllowCustomText bool `json:"allow_custom_text"`
-		}{}
+		response := &service.LocationConfig{}
 
 		path := fmt.Sprintf("/admin/campaigns/%s/config", campaignID)
 		if err := request(input, "GET", path, nil, response); err != nil {
@@ -123,10 +122,8 @@ var locationOptionsListCmd = &args.Command{
 			return err
 		}
 
-		response := &[]struct {
-			ID           int64  `json:"id"`
-			Value        string `json:"value"`
-			DisplayOrder int    `json:"display_order"`
+		response := &struct {
+			Options []*service.LocationOption `json:"options"`
 		}{}
 
 		path := fmt.Sprintf("/admin/campaigns/%s/options", campaignID)
@@ -165,11 +162,7 @@ var locationOptionsAddCmd = &args.Command{
 		}
 
 		body, _ := json.Marshal(payload)
-		response := &struct {
-			ID           int64  `json:"id"`
-			Value        string `json:"value"`
-			DisplayOrder int    `json:"display_order"`
-		}{}
+		response := &service.LocationOption{}
 
 		path := fmt.Sprintf("/admin/campaigns/%s/options", campaignID)
 		if err := request(input, "POST", path, body, response); err != nil {

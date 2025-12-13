@@ -15,6 +15,14 @@ type Campaign struct {
 	CreatedAt       int64  `json:"created_at"`
 }
 
+// Campaigns wraps a list response with pagination metadata
+type Campaigns struct {
+	Campaigns []*Campaign `json:"campaigns"`
+	Total     int         `json:"total"`
+	Limit     int         `json:"limit"`
+	Offset    int         `json:"offset"`
+}
+
 // CampaignStore interface for campaign data operations
 type CampaignStore interface {
 	Insert(id, name string, allowCustomText bool, createdAt int64) error
@@ -70,8 +78,8 @@ func GetCampaign(id string) (*Campaign, error) {
 	return campaignStore.GetByID(id)
 }
 
-// ListCampaigns retrieves all campaigns with pagination
-func ListCampaigns(limit, offset int) ([]*Campaign, error) {
+// ListCampaigns retrieves all campaigns with pagination and total count
+func ListCampaigns(limit, offset int) (*Campaigns, error) {
 	if campaignStore == nil {
 		return nil, ErrNoCampaignStore
 	}
@@ -84,15 +92,22 @@ func ListCampaigns(limit, offset int) ([]*Campaign, error) {
 		offset = 0
 	}
 
-	return campaignStore.List(limit, offset)
-}
-
-// CountCampaigns returns the total number of campaigns
-func CountCampaigns() (int, error) {
-	if campaignStore == nil {
-		return 0, ErrNoCampaignStore
+	campaigns, err := campaignStore.List(limit, offset)
+	if err != nil {
+		return nil, err
 	}
-	return campaignStore.Count()
+
+	total, err := campaignStore.Count()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Campaigns{
+		Campaigns: campaigns,
+		Total:     total,
+		Limit:     limit,
+		Offset:    offset,
+	}, nil
 }
 
 // UpdateCampaign updates a campaign's name and config

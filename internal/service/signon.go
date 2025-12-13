@@ -15,6 +15,14 @@ type Signon struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+// Signons wraps a list response with pagination metadata
+type Signons struct {
+	Signons []*Signon `json:"signons"`
+	Total   int       `json:"total"`
+	Limit   int       `json:"limit"`
+	Offset  int       `json:"offset"`
+}
+
 // SignonStore interface for data operations
 type SignonStore interface {
 	Insert(campaignID, name, email, location string, createdAt int64) (int64, error)
@@ -107,8 +115,8 @@ func GetSignon(campaignID string, id int64) (*Signon, error) {
 	return signonStore.GetByID(campaignID, id)
 }
 
-// ListSignons retrieves all sign-ons with pagination
-func ListSignons(campaignID string, limit, offset int) ([]*Signon, error) {
+// ListSignons retrieves all sign-ons with pagination and total count
+func ListSignons(campaignID string, limit, offset int) (*Signons, error) {
 	if signonStore == nil {
 		return nil, ErrNoSignonStore
 	}
@@ -121,15 +129,22 @@ func ListSignons(campaignID string, limit, offset int) ([]*Signon, error) {
 		offset = 0
 	}
 
-	return signonStore.List(campaignID, limit, offset)
-}
-
-// CountSignons returns the total number of sign-ons
-func CountSignons(campaignID string) (int, error) {
-	if signonStore == nil {
-		return 0, ErrNoSignonStore
+	list, err := signonStore.List(campaignID, limit, offset)
+	if err != nil {
+		return nil, err
 	}
-	return signonStore.Count(campaignID)
+
+	total, err := signonStore.Count(campaignID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Signons{
+		Signons: list,
+		Total:   total,
+		Limit:   limit,
+		Offset:  offset,
+	}, nil
 }
 
 // DeleteSignon removes a sign-on by ID

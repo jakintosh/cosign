@@ -9,13 +9,37 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type CreateCampaignRequest struct {
+	Name string `json:"name"`
+}
+
+type UpdateCampaignRequest struct {
+	Name            string `json:"name"`
+	AllowCustomText *bool  `json:"allow_custom_text"`
+}
+
+type CreateSignonRequest struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Location string `json:"location"`
+}
+
+type UpdateLocationConfigRequest struct {
+	AllowCustomText bool `json:"allow_custom_text"`
+}
+
+type LocationOptionRequest struct {
+	Value        string `json:"value"`
+	DisplayOrder int    `json:"display_order"`
+}
+
 // buildCampaignPublicRouter builds public campaign routes
 func buildCampaignPublicRouter(r *mux.Router) {
-	r.HandleFunc("/{uuid}", withCORSAndCampaign(handleGetCampaignPublic)).Methods("GET", "OPTIONS")
-	r.HandleFunc("/{uuid}/signons", withCORSAndCampaign(handleListSignonsPublic)).Methods("GET", "OPTIONS")
-	r.HandleFunc("/{uuid}/signons", withCORSAndRateLimit(withCampaign(handleCreateSignonPublic))).Methods("POST", "OPTIONS")
-	r.HandleFunc("/{uuid}/config", withCORSAndCampaign(handleGetLocationConfig)).Methods("GET", "OPTIONS")
-	r.HandleFunc("/{uuid}/options", withCORSAndCampaign(handleListLocationOptions)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/{campaignId}", withCORS(handleGetCampaignPublic)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/{campaignId}/signons", withCORS(handleListSignonsPublic)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/{campaignId}/signons", withCORSAndRateLimit(handleCreateSignonPublic)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/{campaignId}/config", withCORS(handleGetLocationConfig)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/{campaignId}/options", withCORS(handleListLocationOptions)).Methods("GET", "OPTIONS")
 }
 
 // buildAdminCampaignRouter builds admin campaign routes
@@ -23,63 +47,29 @@ func buildAdminCampaignRouter(r *mux.Router) {
 	// Campaign CRUD
 	r.HandleFunc("", withAuth(handleListCampaigns)).Methods("GET")
 	r.HandleFunc("", withAuth(handleCreateCampaign)).Methods("POST")
-	r.HandleFunc("/{uuid}", withAuth(withCampaign(handleGetCampaign))).Methods("GET")
-	r.HandleFunc("/{uuid}", withAuth(withCampaign(handleUpdateCampaign))).Methods("PUT")
-	r.HandleFunc("/{uuid}", withAuth(withCampaign(handleDeleteCampaign))).Methods("DELETE")
+	r.HandleFunc("/{campaignId}", withAuth(handleGetCampaign)).Methods("GET")
+	r.HandleFunc("/{campaignId}", withAuth(handleUpdateCampaign)).Methods("PUT")
+	r.HandleFunc("/{campaignId}", withAuth(handleDeleteCampaign)).Methods("DELETE")
 
 	// Campaign-scoped signons
-	r.HandleFunc("/{uuid}/signons", withAuth(withCampaign(handleListSignonsAdmin))).Methods("GET")
-	r.HandleFunc("/{uuid}/signons/{id}", withAuth(withCampaign(handleDeleteSignon))).Methods("DELETE")
+	r.HandleFunc("/{campaignId}/signons", withAuth(handleListSignonsAdmin)).Methods("GET")
+	r.HandleFunc("/{campaignId}/signons/{signonId}", withAuth(handleDeleteSignon)).Methods("DELETE")
 
 	// Campaign-scoped config and options
-	r.HandleFunc("/{uuid}/config", withAuth(withCampaign(handleGetLocationConfigAdmin))).Methods("GET")
-	r.HandleFunc("/{uuid}/config", withAuth(withCampaign(handleUpdateLocationConfig))).Methods("PUT")
-	r.HandleFunc("/{uuid}/options", withAuth(withCampaign(handleListLocationOptionsAdmin))).Methods("GET")
-	r.HandleFunc("/{uuid}/options", withAuth(withCampaign(handleAddLocationOption))).Methods("POST")
-	r.HandleFunc("/{uuid}/options/{id}", withAuth(withCampaign(handleUpdateLocationOption))).Methods("PUT")
-	r.HandleFunc("/{uuid}/options/{id}", withAuth(withCampaign(handleDeleteLocationOption))).Methods("DELETE")
-}
-
-// withCampaign extracts campaign UUID from path and validates it exists
-func withCampaign(next func(w http.ResponseWriter, r *http.Request, campaignID string)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		campaignID := vars["uuid"]
-
-		if campaignID == "" {
-			writeError(w, http.StatusBadRequest, "Campaign ID required")
-			return
-		}
-
-		// Verify campaign exists
-		_, err := service.GetCampaign(campaignID)
-		if err != nil {
-			if err == service.ErrCampaignNotFound {
-				writeError(w, http.StatusNotFound, "Campaign not found")
-				return
-			}
-			writeError(w, http.StatusInternalServerError, "Failed to verify campaign")
-			return
-		}
-
-		next(w, r, campaignID)
-	}
+	r.HandleFunc("/{campaignId}/config", withAuth(handleGetLocationConfigAdmin)).Methods("GET")
+	r.HandleFunc("/{campaignId}/config", withAuth(handleUpdateLocationConfig)).Methods("PUT")
+	r.HandleFunc("/{campaignId}/options", withAuth(handleListLocationOptionsAdmin)).Methods("GET")
+	r.HandleFunc("/{campaignId}/options", withAuth(handleAddLocationOption)).Methods("POST")
+	r.HandleFunc("/{campaignId}/options/{optionId}", withAuth(handleUpdateLocationOption)).Methods("PUT")
+	r.HandleFunc("/{campaignId}/options/{optionId}", withAuth(handleDeleteLocationOption)).Methods("DELETE")
 }
 
 // Campaign handlers
 func handleListCampaigns(w http.ResponseWriter, r *http.Request) {
-	limit := 100
-	offset := 0
-
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
+	limit, offset, malformedQueryErr := parsePaginationQueries(r)
+	if malformedQueryErr != nil {
+		writeError(w, http.StatusBadRequest, malformedQueryErr.Error())
+		return
 	}
 
 	campaigns, err := service.ListCampaigns(limit, offset)
@@ -88,26 +78,11 @@ func handleListCampaigns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := service.CountCampaigns()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to count campaigns")
-		return
-	}
-
-	response := map[string]interface{}{
-		"campaigns": campaigns,
-		"total":     count,
-		"limit":     limit,
-		"offset":    offset,
-	}
-	writeData(w, http.StatusOK, response)
+	writeData(w, http.StatusOK, campaigns)
 }
 
 func handleCreateCampaign(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name string `json:"name"`
-	}
-
+	var req CreateCampaignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -126,8 +101,15 @@ func handleCreateCampaign(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusCreated, campaign)
 }
 
-func handleGetCampaign(w http.ResponseWriter, r *http.Request, campaignID string) {
-	campaign, err := service.GetCampaign(campaignID)
+func handleGetCampaign(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
+	campaign, err := service.GetCampaign(campaignId)
 	if err != nil {
 		if err == service.ErrCampaignNotFound {
 			writeError(w, http.StatusNotFound, "Campaign not found")
@@ -140,8 +122,15 @@ func handleGetCampaign(w http.ResponseWriter, r *http.Request, campaignID string
 	writeData(w, http.StatusOK, campaign)
 }
 
-func handleGetCampaignPublic(w http.ResponseWriter, r *http.Request, campaignID string) {
-	campaign, err := service.GetCampaign(campaignID)
+func handleGetCampaignPublic(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
+	campaign, err := service.GetCampaign(campaignId)
 	if err != nil {
 		if err == service.ErrCampaignNotFound {
 			writeError(w, http.StatusNotFound, "Campaign not found")
@@ -154,18 +143,21 @@ func handleGetCampaignPublic(w http.ResponseWriter, r *http.Request, campaignID 
 	writeData(w, http.StatusOK, campaign)
 }
 
-func handleUpdateCampaign(w http.ResponseWriter, r *http.Request, campaignID string) {
-	var req struct {
-		Name            string `json:"name"`
-		AllowCustomText *bool  `json:"allow_custom_text"`
+func handleUpdateCampaign(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
 	}
 
+	var req UpdateCampaignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	campaign, err := service.GetCampaign(campaignID)
+	campaign, err := service.GetCampaign(campaignId)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get campaign")
 		return
@@ -183,18 +175,25 @@ func handleUpdateCampaign(w http.ResponseWriter, r *http.Request, campaignID str
 		allowCustomText = *req.AllowCustomText
 	}
 
-	err = service.UpdateCampaign(campaignID, name, allowCustomText)
+	err = service.UpdateCampaign(campaignId, name, allowCustomText)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update campaign")
 		return
 	}
 
-	updated, _ := service.GetCampaign(campaignID)
+	updated, _ := service.GetCampaign(campaignId)
 	writeData(w, http.StatusOK, updated)
 }
 
-func handleDeleteCampaign(w http.ResponseWriter, r *http.Request, campaignID string) {
-	err := service.DeleteCampaign(campaignID)
+func handleDeleteCampaign(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
+	err := service.DeleteCampaign(campaignId)
 	if err != nil {
 		if err == service.ErrCampaignNotFound {
 			writeError(w, http.StatusNotFound, "Campaign not found")
@@ -208,19 +207,21 @@ func handleDeleteCampaign(w http.ResponseWriter, r *http.Request, campaignID str
 }
 
 // Signon handlers (campaign-scoped)
-func handleCreateSignonPublic(w http.ResponseWriter, r *http.Request, campaignID string) {
-	var req struct {
-		Name     string `json:"name"`
-		Email    string `json:"email"`
-		Location string `json:"location"`
+func handleCreateSignonPublic(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
 	}
 
+	var req CreateSignonRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	signon, err := service.CreateSignon(campaignID, req.Name, req.Email, req.Location, false)
+	signon, err := service.CreateSignon(campaignId, req.Name, req.Email, req.Location, false)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch err {
@@ -241,89 +242,69 @@ func handleCreateSignonPublic(w http.ResponseWriter, r *http.Request, campaignID
 	writeData(w, http.StatusCreated, signon)
 }
 
-func handleListSignonsPublic(w http.ResponseWriter, r *http.Request, campaignID string) {
-	limit := 100
-	offset := 0
-
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
-
-	signons, err := service.ListSignons(campaignID, limit, offset)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list signons")
+func handleListSignonsPublic(w http.ResponseWriter, r *http.Request) {
+	limit, offset, malformedQueryErr := parsePaginationQueries(r)
+	if malformedQueryErr != nil {
+		writeError(w, http.StatusBadRequest, malformedQueryErr.Error())
 		return
 	}
 
-	count, err := service.CountSignons(campaignID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to count signons")
-		return
-	}
-
-	response := map[string]interface{}{
-		"signons": signons,
-		"total":   count,
-		"limit":   limit,
-		"offset":  offset,
-	}
-	writeData(w, http.StatusOK, response)
-}
-
-func handleListSignonsAdmin(w http.ResponseWriter, r *http.Request, campaignID string) {
-	limit := 100
-	offset := 0
-
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
-
-	signons, err := service.ListSignons(campaignID, limit, offset)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list signons")
-		return
-	}
-
-	count, err := service.CountSignons(campaignID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to count signons")
-		return
-	}
-
-	response := map[string]interface{}{
-		"signons": signons,
-		"total":   count,
-		"limit":   limit,
-		"offset":  offset,
-	}
-	writeData(w, http.StatusOK, response)
-}
-
-func handleDeleteSignon(w http.ResponseWriter, r *http.Request, campaignID string) {
 	vars := mux.Vars(r)
-	idStr := vars["id"]
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	signons, err := service.ListSignons(campaignId, limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list signons")
+		return
+	}
+
+	writeData(w, http.StatusOK, signons)
+}
+
+func handleListSignonsAdmin(w http.ResponseWriter, r *http.Request) {
+	limit, offset, malformedQueryErr := parsePaginationQueries(r)
+	if malformedQueryErr != nil {
+		writeError(w, http.StatusBadRequest, malformedQueryErr.Error())
+		return
+	}
+
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
+	signons, err := service.ListSignons(campaignID, limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list signons")
+		return
+	}
+
+	writeData(w, http.StatusOK, signons)
+}
+
+func handleDeleteSignon(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignId := vars["campaignId"]
+	if campaignId == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+	signonIdStr := vars["signonId"]
+
+	signonId, err := strconv.ParseInt(signonIdStr, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid signon ID")
 		return
 	}
 
-	err = service.DeleteSignon(campaignID, id)
+	err = service.DeleteSignon(campaignId, signonId)
 	if err != nil {
 		if err == service.ErrSignonNotFound {
 			writeError(w, http.StatusNotFound, "Signon not found")
@@ -337,7 +318,14 @@ func handleDeleteSignon(w http.ResponseWriter, r *http.Request, campaignID strin
 }
 
 // Location config and options handlers (campaign-scoped)
-func handleGetLocationConfig(w http.ResponseWriter, r *http.Request, campaignID string) {
+func handleGetLocationConfig(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
 	config, err := service.GetLocationConfig(campaignID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get location config")
@@ -350,31 +338,42 @@ func handleGetLocationConfig(w http.ResponseWriter, r *http.Request, campaignID 
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"config":  config,
 		"options": options,
 	}
 	writeData(w, http.StatusOK, response)
 }
 
-func handleGetLocationConfigAdmin(w http.ResponseWriter, r *http.Request, campaignID string) {
+func handleGetLocationConfigAdmin(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
 	config, err := service.GetLocationConfig(campaignID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get location config")
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"config": config,
 	}
 	writeData(w, http.StatusOK, response)
 }
 
-func handleUpdateLocationConfig(w http.ResponseWriter, r *http.Request, campaignID string) {
-	var req struct {
-		AllowCustomText bool `json:"allow_custom_text"`
+func handleUpdateLocationConfig(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
 	}
 
+	var req UpdateLocationConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
@@ -389,7 +388,14 @@ func handleUpdateLocationConfig(w http.ResponseWriter, r *http.Request, campaign
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleListLocationOptions(w http.ResponseWriter, r *http.Request, campaignID string) {
+func handleListLocationOptions(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
 	options, err := service.GetLocationOptions(campaignID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get location options")
@@ -399,31 +405,41 @@ func handleListLocationOptions(w http.ResponseWriter, r *http.Request, campaignI
 	writeData(w, http.StatusOK, options)
 }
 
-func handleListLocationOptionsAdmin(w http.ResponseWriter, r *http.Request, campaignID string) {
+func handleListLocationOptionsAdmin(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+
 	options, err := service.GetLocationOptions(campaignID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get location options")
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"options": options,
 	}
 	writeData(w, http.StatusOK, response)
 }
 
-func handleAddLocationOption(w http.ResponseWriter, r *http.Request, campaignID string) {
-	var req struct {
-		Value        string `json:"value"`
-		DisplayOrder int    `json:"display_order"`
+func handleAddLocationOption(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
 	}
 
+	var req LocationOptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	id, err := service.AddLocationOption(campaignID, req.Value, req.DisplayOrder)
+	locationId, err := service.AddLocationOption(campaignID, req.Value, req.DisplayOrder)
 	if err != nil {
 		if err == service.ErrEmptyLocation {
 			writeError(w, http.StatusBadRequest, "Location value cannot be empty")
@@ -433,35 +449,36 @@ func handleAddLocationOption(w http.ResponseWriter, r *http.Request, campaignID 
 		return
 	}
 
-	response := map[string]interface{}{
-		"id":             id,
-		"value":          req.Value,
-		"display_order":  req.DisplayOrder,
+	response := map[string]any{
+		"id":            locationId,
+		"value":         req.Value,
+		"display_order": req.DisplayOrder,
 	}
 	writeData(w, http.StatusCreated, response)
 }
 
-func handleUpdateLocationOption(w http.ResponseWriter, r *http.Request, campaignID string) {
+func handleUpdateLocationOption(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	idStr := vars["id"]
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+	optionIdStr := vars["optionId"]
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	optionId, err := strconv.ParseInt(optionIdStr, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid option ID")
 		return
 	}
 
-	var req struct {
-		Value        string `json:"value"`
-		DisplayOrder int    `json:"display_order"`
-	}
-
+	var req LocationOptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	err = service.UpdateLocationOption(campaignID, id, req.Value, req.DisplayOrder)
+	err = service.UpdateLocationOption(campaignID, optionId, req.Value, req.DisplayOrder)
 	if err != nil {
 		if err == service.ErrLocationOptionNotFound {
 			writeError(w, http.StatusNotFound, "Location option not found")
@@ -478,17 +495,22 @@ func handleUpdateLocationOption(w http.ResponseWriter, r *http.Request, campaign
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleDeleteLocationOption(w http.ResponseWriter, r *http.Request, campaignID string) {
+func handleDeleteLocationOption(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	idStr := vars["id"]
+	campaignID := vars["campaignId"]
+	if campaignID == "" {
+		writeError(w, http.StatusBadRequest, "Campaign ID required")
+		return
+	}
+	optionIdStr := vars["optionId"]
 
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	optionId, err := strconv.ParseInt(optionIdStr, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid option ID")
 		return
 	}
 
-	err = service.DeleteLocationOption(campaignID, id)
+	err = service.DeleteLocationOption(campaignID, optionId)
 	if err != nil {
 		if err == service.ErrLocationOptionNotFound {
 			writeError(w, http.StatusNotFound, "Location option not found")
@@ -501,12 +523,7 @@ func handleDeleteLocationOption(w http.ResponseWriter, r *http.Request, campaign
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Helper to apply both CORS and campaign validation
-func withCORSAndCampaign(next func(w http.ResponseWriter, r *http.Request, campaignID string)) http.HandlerFunc {
-	return withCORS(withCampaign(next))
-}
-
-// Helper to apply both CORS, rate limiting, and campaign validation
+// Helper to apply both CORS and rate limiting
 func withCORSAndRateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return withCORS(withRateLimit(next))
 }
