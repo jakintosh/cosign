@@ -130,3 +130,74 @@ func (DBCampaignStore) Delete(id string) error {
 
 	return nil
 }
+
+// GetLocationOptions returns location options for a campaign.
+func (DBCampaignStore) GetLocationOptions(campaignID string) ([]*service.LocationOption, error) {
+	var exists int
+	if err := DB().QueryRow(`SELECT COUNT(*) FROM campaigns WHERE id = ?1`, campaignID).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("failed to verify campaign: %w", err)
+	}
+	if exists == 0 {
+		return nil, service.ErrCampaignNotFound
+	}
+
+	rows, err := DB().Query(
+		`SELECT id, value, display_order FROM locations WHERE campaign_id = ?1 ORDER BY display_order ASC`,
+		campaignID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get location options: %w", err)
+	}
+	defer rows.Close()
+
+	var options []*service.LocationOption
+	for rows.Next() {
+		var opt service.LocationOption
+		if err := rows.Scan(&opt.ID, &opt.Value, &opt.DisplayOrder); err != nil {
+			return nil, fmt.Errorf("failed to scan location option: %w", err)
+		}
+		options = append(options, &opt)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return options, nil
+}
+
+// ReplaceLocationOptions replaces location options for a campaign transactionally.
+func (DBCampaignStore) ReplaceLocationOptions(campaignID string, options []service.LocationOption) error {
+	tx, err := DB().Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var exists int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM campaigns WHERE id = ?1`, campaignID).Scan(&exists); err != nil {
+		return fmt.Errorf("failed to verify campaign: %w", err)
+	}
+	if exists == 0 {
+		return service.ErrCampaignNotFound
+	}
+
+	if _, err := tx.Exec(`DELETE FROM locations WHERE campaign_id = ?1`, campaignID); err != nil {
+		return fmt.Errorf("failed to clear location options: %w", err)
+	}
+
+	for _, opt := range options {
+		if _, err := tx.Exec(
+			`INSERT INTO locations (campaign_id, value, display_order) VALUES (?1, ?2, ?3)`,
+			campaignID, opt.Value, opt.DisplayOrder,
+		); err != nil {
+			return fmt.Errorf("failed to insert location option: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit config update: %w", err)
+	}
+
+	return nil
+}

@@ -18,61 +18,6 @@ var migrations = []migration{
 	{
 		version: 1,
 		sql: `
-			CREATE TABLE IF NOT EXISTS signons (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name TEXT NOT NULL,
-				email TEXT NOT NULL,
-				location TEXT NOT NULL,
-				created_at INTEGER NOT NULL
-			);
-			CREATE INDEX idx_signons_email ON signons(email);
-			CREATE INDEX idx_signons_created_at ON signons(created_at);
-		`,
-	},
-	{
-		version: 2,
-		sql: `
-			CREATE TABLE IF NOT EXISTS location_config (
-				id INTEGER PRIMARY KEY CHECK (id = 1),
-				allow_custom_text INTEGER NOT NULL DEFAULT 1
-			);
-			INSERT INTO location_config (id, allow_custom_text) VALUES (1, 1);
-		`,
-	},
-	{
-		version: 3,
-		sql: `
-			CREATE TABLE IF NOT EXISTS location_options (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				value TEXT NOT NULL UNIQUE,
-				display_order INTEGER NOT NULL
-			);
-			CREATE INDEX idx_location_options_order ON location_options(display_order);
-		`,
-	},
-	{
-		version: 4,
-		sql: `
-			CREATE TABLE IF NOT EXISTS api_key (
-				id TEXT NOT NULL PRIMARY KEY,
-				salt TEXT NOT NULL,
-				hash TEXT NOT NULL,
-				created INTEGER,
-				last_used INTEGER
-			);
-		`,
-	},
-	{
-		version: 5,
-		sql: `
-			CREATE TABLE IF NOT EXISTS allowed_origin (
-				url TEXT NOT NULL PRIMARY KEY
-			);
-		`,
-	},
-	{
-		version: 6,
-		sql: `
 			CREATE TABLE IF NOT EXISTS campaigns (
 				id TEXT PRIMARY KEY,
 				name TEXT NOT NULL,
@@ -80,27 +25,38 @@ var migrations = []migration{
 				created_at INTEGER NOT NULL
 			);
 
-			ALTER TABLE signons ADD COLUMN campaign_id TEXT;
-			ALTER TABLE location_options ADD COLUMN campaign_id TEXT;
+			CREATE TABLE IF NOT EXISTS locations (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				campaign_id TEXT NOT NULL,
+				value TEXT NOT NULL,
+				display_order INTEGER NOT NULL,
+				UNIQUE(campaign_id, value)
+			);
+			CREATE INDEX IF NOT EXISTS idx_locations_campaign_order ON locations(campaign_id, display_order);
 
-			INSERT INTO campaigns (id, name, allow_custom_text, created_at)
-			SELECT
-				'00000000-0000-0000-0000-000000000000',
-				'Default Campaign',
-				COALESCE((SELECT allow_custom_text FROM location_config WHERE id = 1), 1),
-				COALESCE((SELECT MIN(created_at) FROM signons), strftime('%s', 'now'));
+			CREATE TABLE IF NOT EXISTS signons (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				campaign_id TEXT NOT NULL,
+				name TEXT NOT NULL,
+				email TEXT NOT NULL,
+				location TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				UNIQUE(campaign_id, email)
+			);
+			CREATE INDEX IF NOT EXISTS idx_signons_campaign ON signons(campaign_id);
+			CREATE INDEX IF NOT EXISTS idx_signons_campaign_created ON signons(campaign_id, created_at);
 
-			UPDATE signons SET campaign_id = '00000000-0000-0000-0000-000000000000' WHERE campaign_id IS NULL;
-			UPDATE location_options SET campaign_id = '00000000-0000-0000-0000-000000000000' WHERE campaign_id IS NULL;
-		`,
-	},
-	{
-		version: 7,
-		sql: `
-			CREATE INDEX IF NOT EXISTS idx_signons_campaign_id ON signons(campaign_id);
-			CREATE INDEX IF NOT EXISTS idx_signons_campaign_email ON signons(campaign_id, email);
-			CREATE INDEX IF NOT EXISTS idx_location_options_campaign ON location_options(campaign_id);
-			DROP TABLE IF EXISTS location_config;
+			CREATE TABLE IF NOT EXISTS api_key (
+				id TEXT NOT NULL PRIMARY KEY,
+				salt TEXT NOT NULL,
+				hash TEXT NOT NULL,
+				created INTEGER,
+				last_used INTEGER
+			);
+
+			CREATE TABLE IF NOT EXISTS allowed_origin (
+				url TEXT NOT NULL PRIMARY KEY
+			);
 		`,
 	},
 }
@@ -135,7 +91,6 @@ func Init(dbPath string, useWAL bool) error {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	// log.Printf("Database initialized at %s", dbPath)
 	return nil
 }
 
@@ -143,7 +98,6 @@ func runMigrations() error {
 	current := getSchemaVersion()
 	for _, m := range migrations {
 		if m.version > current {
-			// log.Printf("Running migration %d...", m.version)
 			if _, err := db.Exec(m.sql); err != nil {
 				return fmt.Errorf("migration %d failed: %w", m.version, err)
 			}

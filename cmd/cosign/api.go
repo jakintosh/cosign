@@ -10,7 +10,6 @@ var apiCmd = &args.Command{
 	Subcommands: []*args.Command{
 		campaignsCmd,
 		signonsCmd,
-		locationCmd,
 		keysCmd,
 		corsCmd,
 	},

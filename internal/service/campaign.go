@@ -15,6 +15,13 @@ type Campaign struct {
 	CreatedAt       int64  `json:"created_at"`
 }
 
+// LocationOption represents a preset location option
+type LocationOption struct {
+	ID           int64  `json:"id,omitempty"`
+	Value        string `json:"value"`
+	DisplayOrder int    `json:"display_order"`
+}
+
 // Campaigns wraps a list response with pagination metadata
 type Campaigns struct {
 	Campaigns []*Campaign `json:"campaigns"`
@@ -31,6 +38,8 @@ type CampaignStore interface {
 	Count() (int, error)
 	Update(id, name string, allowCustomText bool) error
 	Delete(id string) error
+	GetLocationOptions(campaignID string) ([]*LocationOption, error)
+	ReplaceLocationOptions(campaignID string, options []LocationOption) error
 }
 
 var campaignStore CampaignStore
@@ -131,4 +140,41 @@ func DeleteCampaign(id string) error {
 		return ErrNoCampaignStore
 	}
 	return campaignStore.Delete(id)
+}
+
+// GetCampaignLocations returns the location options for a campaign.
+func GetCampaignLocations(campaignID string) ([]LocationOption, error) {
+	if campaignStore == nil {
+		return nil, ErrNoCampaignStore
+	}
+
+	options, err := campaignStore.GetLocationOptions(campaignID)
+	if err != nil {
+		return nil, err
+	}
+
+	locations := make([]LocationOption, 0, len(options))
+	for _, opt := range options {
+		if opt == nil {
+			continue
+		}
+		locations = append(locations, *opt)
+	}
+
+	return locations, nil
+}
+
+// SetCampaignLocations replaces the location options for a campaign.
+func SetCampaignLocations(campaignID string, options []LocationOption) error {
+	if campaignStore == nil {
+		return ErrNoCampaignStore
+	}
+
+	for _, loc := range options {
+		if strings.TrimSpace(loc.Value) == "" {
+			return ErrEmptyLocation
+		}
+	}
+
+	return campaignStore.ReplaceLocationOptions(campaignID, options)
 }

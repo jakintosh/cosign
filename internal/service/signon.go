@@ -177,7 +177,7 @@ func validateLocation(campaignID, location string) error {
 	}
 
 	// Otherwise, location must be in the preset options
-	options, err := locationOptionStore.GetOptions(campaignID)
+	options, err := GetCampaignLocations(campaignID)
 	if err != nil {
 		return err
 	}

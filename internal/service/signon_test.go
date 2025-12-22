@@ -128,7 +128,6 @@ func TestCreateSignonHappyPath(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil) // Allow any location
 
 	signon, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "New York", false)
 
@@ -156,7 +155,6 @@ func TestCreateSignonTrimsWhitespace(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	signon, err := service.CreateSignon(testCampaignIDSignon, "  Jane Doe  ", "  jane@example.com  ", "  Boston  ", false)
 
@@ -237,7 +235,6 @@ func TestCreateSignonDuplicateEmailNotAllowed(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	// Create first signon
 	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
@@ -259,7 +256,6 @@ func TestCreateSignonDuplicateEmailAllowed(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	// Create first signon
 	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", true)
@@ -286,10 +282,10 @@ func TestCreateSignonLocationValidationWithPreset(t *testing.T) {
 	setupTestCampaign(campaignStore, false) // Strict mode
 	service.SetCampaignStore(campaignStore)
 
-	locationStore := newMockLocationOptionStore()
-	locationStore.AddOption(testCampaignIDSignon, "New York", 1)
-	locationStore.AddOption(testCampaignIDSignon, "Boston", 2)
-	service.SetLocationOptionStore(locationStore)
+	campaignStore.options[testCampaignIDSignon] = []service.LocationOption{
+		{ID: 1, Value: "New York", DisplayOrder: 1},
+		{ID: 2, Value: "Boston", DisplayOrder: 2},
+	}
 
 	// Valid preset location
 	signon, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "New York", false)
@@ -315,9 +311,6 @@ func TestCreateSignonLocationValidationCustomAllowed(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true) // Custom text allowed
 	service.SetCampaignStore(campaignStore)
-
-	locationStore := newMockLocationOptionStore()
-	service.SetLocationOptionStore(locationStore)
 
 	// Custom location should be allowed
 	signon, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "Anywhere", false)
@@ -347,7 +340,6 @@ func TestGetSignonHappyPath(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	created, _ := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
@@ -394,7 +386,6 @@ func TestListSignonsHappyPath(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 	service.CreateSignon(testCampaignIDSignon, "Jane Doe", "jane@example.com", "Boston", false)
@@ -448,7 +439,6 @@ func TestListSignonsIncludesTotal(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	resp, err := service.ListSignons(testCampaignIDSignon, 5, 0)
 	if err != nil {
@@ -477,7 +467,6 @@ func TestDeleteSignonHappyPath(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	signon, _ := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
@@ -524,7 +513,6 @@ func TestCreateSignonValidEmailFormats(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	validEmails := []string{
 		"user@example.com",
@@ -553,7 +541,6 @@ func TestCreateSignonStoreError(t *testing.T) {
 	campaignStore := newMockCampaignStore()
 	setupTestCampaign(campaignStore, true)
 	service.SetCampaignStore(campaignStore)
-	service.SetLocationOptionStore(nil)
 
 	_, err := service.CreateSignon(testCampaignIDSignon, "John Doe", "john@example.com", "NYC", false)
 
