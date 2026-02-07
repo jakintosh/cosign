@@ -1,61 +1,58 @@
 package main
 
 import (
+	"cosign/internal/service"
 	"fmt"
 	"strings"
 
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
+	"git.sr.ht/~jakintosh/command-go/pkg/envs"
 )
 
 var statusCmd = &args.Command{
 	Name: "status",
-	Help: "show environment and server health",
-	Options: []args.Option{
-		{
-			Long: "verbose",
-			Type: args.OptionTypeFlag,
-			Help: "show detailed output",
-		},
-	},
+	Help: "show active environment and server health",
 	Handler: func(i *args.Input) error {
+		verbose := i.GetFlag("verbose")
 
-		cfg, err := envConfig(i)
-		env := DEFAULT_ENV
-		key := ""
-		if err == nil {
-			if cfg.GetActiveEnv() != "" {
-				env = cfg.GetActiveEnv()
-			}
-			key = cfg.GetApiKey()
+		cfg, err := envs.LoadConfig(i, DEFAULT_CFG)
+		if err != nil {
+			return err
 		}
 
-		base := strings.TrimSuffix(baseURLWithConfig(i, cfg), "/api/v1")
+		activeEnv := cfg.ResolveActiveEnvName(i)
+		client := cfg.ResolveClient(i, API_PREFIX)
+		if strings.HasPrefix(client.BaseURL, "/") {
+			client.BaseURL = DEFAULT_BASE_URL + client.BaseURL
+		}
 
-		fmt.Printf("Environment: %s\n", env)
-		fmt.Printf("Base URL: %s\n", base)
-		if key == "" {
-			fmt.Println("API Key: none")
+		fmt.Printf("Environment: %s\n", activeEnv)
+		fmt.Printf("Base URL: %s\n", client.BaseURL)
+		if client.APIKey == "" {
+			fmt.Println("API Key: none configured")
 		} else {
 			fmt.Println("API Key: present")
 		}
 
-		response := &map[string]string{}
-		if err := request(i, "GET", "/health", nil, response); err != nil {
+		response := service.HealthResponse{}
+		if err := client.Get("/health", &response); err != nil {
 			fmt.Println("Health: down")
-			if i.GetFlag("verbose") {
+			if verbose {
 				fmt.Printf("  error: %v\n", err)
 			}
 			return nil
 		}
 
-		if data, ok := (*response)["status"]; ok && data == "healthy" {
+		if response.Status == "healthy" {
 			fmt.Println("Health: up")
 		} else {
-			fmt.Printf("Health: down\n")
+			fmt.Println("Health: down")
 		}
-		if i.GetFlag("verbose") {
+
+		if verbose {
 			return writeJSON(response)
 		}
+
 		return nil
 	},
 }

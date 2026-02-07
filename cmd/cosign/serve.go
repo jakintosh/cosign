@@ -1,24 +1,24 @@
 package main
 
 import (
-	"cosign/internal/api"
 	"cosign/internal/database"
 	"cosign/internal/service"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
-	"github.com/gorilla/mux"
+	"git.sr.ht/~jakintosh/command-go/pkg/cors"
+	"git.sr.ht/~jakintosh/command-go/pkg/keys"
 )
 
 const (
-	DB_FILE_PATH          = "/var/lib/" + BIN_NAME
-	PORT                  = "8080"
-	CORS_ALLOWED_ORIGINS  = "http://localhost:80"
-	CREDENTIALS_DIRECTORY = "/etc/" + BIN_NAME
+	DEFAULT_CREDS_DIR       = "/etc/cosign"
+	DEFAULT_DB_PATH         = "/var/lib/cosign/cosign.db"
+	DEFAULT_ALLOWED_ORIGINS = "http://localhost:3000"
 )
 
 func resolveOption(
@@ -27,13 +27,78 @@ func resolveOption(
 	env string,
 	def string,
 ) string {
-	if v := i.GetParameter(opt); v != nil && *v != "" {
-		return *v
+	rawParameter := i.GetParameter(opt)
+	rawEnv := os.Getenv(env)
+
+	if rawParameter != nil {
+		parameter := *rawParameter
+		if parameter != "" {
+			return parameter
+		}
 	}
-	if v := os.Getenv(env); v != "" {
-		return v
+
+	if rawEnv != "" {
+		return rawEnv
 	}
+
 	return def
+}
+
+func normalizePort(
+	raw string,
+) (
+	string,
+	error,
+) {
+	port := strings.TrimSpace(raw)
+	port = strings.TrimPrefix(port, ":")
+	if port == "" {
+		return "", fmt.Errorf("port required")
+	}
+
+	value, err := strconv.Atoi(port)
+	if err != nil || value < 1 || value > 65535 {
+		return "", fmt.Errorf("invalid port %q", raw)
+	}
+
+	return ":" + strconv.Itoa(value), nil
+}
+
+func parseCSVValues(
+	raw string,
+) []string {
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+
+	return values
+}
+
+func loadCredential(
+	name string,
+	credsDir string,
+) (
+	string,
+	error,
+) {
+	path := filepath.Join(credsDir, name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("load credential %q: %w", name, err)
+	}
+
+	value := strings.TrimSpace(string(data))
+	if value == "" {
+		return "", fmt.Errorf("credential %q is empty", name)
+	}
+
+	return value, nil
 }
 
 var serveCmd = &args.Command{
@@ -41,7 +106,7 @@ var serveCmd = &args.Command{
 	Help: "run the cosign HTTP API server",
 	Options: []args.Option{
 		{
-			Long: "db-file-path",
+			Long: "db-path",
 			Type: args.OptionTypeParameter,
 			Help: "database file path",
 		},
@@ -62,39 +127,66 @@ var serveCmd = &args.Command{
 		},
 	},
 	Handler: func(i *args.Input) error {
-		// Get options with defaults
-		dbPath := resolveOption(i, "db-file-path", "DB_FILE_PATH", DB_FILE_PATH)
-		port := ":" + resolveOption(i, "port", "PORT", PORT)
-		originsStr := resolveOption(i, "cors-allowed-origins", "CORS_ALLOWED_ORIGINS", CORS_ALLOWED_ORIGINS)
-		var origins []string
-		if originsStr != "" {
-			origins = strings.Split(originsStr, ",")
+		// read inputs
+		rawDBPath := resolveOption(i, "db-path", "COSIGN_DB_PATH", DEFAULT_DB_PATH)
+		rawPort := resolveOption(i, "port", "COSIGN_PORT", DEFAULT_PORT)
+		rawOrigins := resolveOption(i, "cors-allowed-origins", "COSIGN_CORS_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
+		rawCredentialsDirectory := resolveOption(i, "credentials-directory", "COSIGN_CREDENTIALS_DIRECTORY", DEFAULT_CREDS_DIR)
+
+		// validate inputs
+		dbPath := strings.TrimSpace(rawDBPath)
+		if dbPath == "" {
+			return fmt.Errorf("database path required")
 		}
 
-		credsDir := resolveOption(i, "credentials-directory", "CREDENTIALS_DIRECTORY", CREDENTIALS_DIRECTORY)
-		apiKey := loadCredential("api_key", credsDir)
+		credentialsDirectory := strings.TrimSpace(rawCredentialsDirectory)
+		if credentialsDirectory == "" {
+			return fmt.Errorf("credentials directory required")
+		}
 
-		// Initialize database
+		origins := parseCSVValues(rawOrigins)
+
+		port, err := normalizePort(rawPort)
+		if err != nil {
+			return err
+		}
+
+		bootstrapToken, err := loadCredential("api_key", credentialsDirectory)
+		if err != nil {
+			return err
+		}
+
+		// init db
 		log.Printf("Initializing database at %s...", dbPath)
-		if err := database.Init(dbPath, true); err != nil {
-			return fmt.Errorf("failed to initialize database: %w", err)
+		dbOpts := database.Options{
+			Path: dbPath,
+			WAL:  true,
+		}
+		db, err := database.Open(dbOpts)
+		if err != nil {
+			return fmt.Errorf("initialize database: %w", err)
+		}
+		defer db.Close()
+
+		// init service
+		svcOpts := service.Options{
+			Store: db,
+			KeysOptions: &keys.Options{
+				Store:          db.KeysStore,
+				BootstrapToken: bootstrapToken,
+			},
+			CORSOptions: &cors.Options{
+				Store:          db.CORSStore,
+				InitialOrigins: origins,
+			},
+			HealthCheck: db.HealthCheck,
+		}
+		svc, err := service.New(svcOpts)
+		if err != nil {
+			return fmt.Errorf("initialize service: %w", err)
 		}
 
-		// Inject stores into service layer
-		service.SetCampaignStore(database.NewCampaignStore())
-		service.SetSignonStore(database.NewSignonStore())
-		service.SetKeyStore(database.NewKeyStore())
-		service.SetCORSStore(database.NewCORSStore())
-
-		service.InitCORS(origins)
-		service.InitKeys(apiKey)
-
-		// Build router
-		r := mux.NewRouter()
-		api.BuildRouter(r.PathPrefix("/api/v1").Subrouter())
-
-		// Start server
 		log.Printf("Starting server on %s...", port)
-		return http.ListenAndServe(port, r)
+		return svc.Serve(port, API_PREFIX)
 	},
 }

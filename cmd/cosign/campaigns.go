@@ -4,171 +4,80 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"cosign/internal/service"
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var campaignsCmd = &args.Command{
+var campaignCmd = &args.Command{
 	Name: "campaign",
-	Help: "Manage campaigns",
+	Help: "manage campaigns",
 	Subcommands: []*args.Command{
-		campaignsListCmd,
-		campaignsSelectCmd,
-		campaignsCreateCmd,
-		campaignsGetCmd,
-		campaignsSetCmd,
-		campaignsDeleteCmd,
-		campaignsLocationsCmd,
-	},
-	Options: []args.Option{
-		{
-			Long: "uuid",
-			Type: args.OptionTypeParameter,
-			Help: "Campaign UUID (overrides active selection)",
-		},
+		campaignListCmd,
+		campaignCreateCmd,
+		campaignGetCmd,
+		campaignUpdateCmd,
+		campaignDeleteCmd,
+		campaignLocationsCmd,
 	},
 }
 
-var campaignsListCmd = &args.Command{
+var campaignListCmd = &args.Command{
 	Name: "list",
-	Help: "List all campaigns",
+	Help: "list campaigns",
 	Handler: func(i *args.Input) error {
-		response := service.Campaigns{}
-		if err := request(i, "GET", "/admin/campaigns", nil, &response); err != nil {
+		client, err := resolveClient(i, API_PREFIX)
+		if err != nil {
 			return err
 		}
 
-		// Save mapping to config directory
-		cfg, err := envConfig(i)
-		if err != nil {
-			return fmt.Errorf("failed to get environment config: %w", err)
-		}
-
-		configDir := filepath.Join(
-			os.ExpandEnv("$HOME"),
-			".config/cosign",
-			cfg.GetActiveEnv(),
-		)
-
-		// Create mapping from integers to campaign UUIDs
-		mapping := make(map[string]string)
-		for i, campaign := range response.Campaigns {
-			idx := fmt.Sprintf("%d", i+1)
-			mapping[idx] = campaign.ID
-		}
-
-		// Save mapping file
-		mappingPath := filepath.Join(configDir, "campaign_map.json")
-		mappingData, _ := json.MarshalIndent(mapping, "", "  ")
-		if err := os.MkdirAll(configDir, 0700); err != nil {
-			return fmt.Errorf("failed to create config directory: %w", err)
-		}
-		if err := os.WriteFile(mappingPath, mappingData, 0600); err != nil {
-			return fmt.Errorf("failed to save campaign mapping: %w", err)
-		}
-
-		// Print campaigns with their indices
-		for i, campaign := range response.Campaigns {
-			fmt.Printf("%d: \"%s\" (%s)\n", i+1, campaign.Name, campaign.ID)
-		}
-
-		return nil
-	},
-}
-
-var campaignsSelectCmd = &args.Command{
-	Name: "select",
-	Help: "Select active campaign",
-	Operands: []args.Operand{
-		{
-			Name: "id",
-			Help: "Campaign index (from list command)",
-		},
-	},
-	Handler: func(i *args.Input) error {
-		idx := i.GetOperand("id")
-		if idx == "" {
-			return fmt.Errorf("campaign index required")
-		}
-
-		// Get config and load mapping
-		cfg, err := envConfig(i)
-		if err != nil {
-			return fmt.Errorf("failed to get environment config: %w", err)
-		}
-
-		configDir := filepath.Join(
-			os.ExpandEnv("$HOME"),
-			".config/cosign",
-			cfg.GetActiveEnv(),
-		)
-
-		mappingPath := filepath.Join(configDir, "campaign_map.json")
-		mappingData, err := os.ReadFile(mappingPath)
-		if err != nil {
-			return fmt.Errorf("campaign mapping not found, run 'cosign api campaigns list' first: %w", err)
-		}
-
-		var mapping map[string]string
-		if err := json.Unmarshal(mappingData, &mapping); err != nil {
-			return fmt.Errorf("failed to parse campaign mapping: %w", err)
-		}
-
-		campaignID, ok := mapping[idx]
-		if !ok {
-			return fmt.Errorf("invalid campaign index: %s", idx)
-		}
-
-		// Get campaign details to show name
-		response := &service.Campaign{}
-
-		if err := request(i, "GET", fmt.Sprintf("/admin/campaigns/%s", campaignID), nil, response); err != nil {
+		var response service.Campaigns
+		if err := client.Get("/admin/campaigns", &response); err != nil {
 			return err
 		}
 
-		// Save active campaign
-		activePath := filepath.Join(configDir, "active_campaign")
-		if err := os.MkdirAll(configDir, 0700); err != nil {
-			return fmt.Errorf("failed to create config directory: %w", err)
-		}
-		if err := os.WriteFile(activePath, []byte(campaignID), 0600); err != nil {
-			return fmt.Errorf("failed to save active campaign: %w", err)
-		}
-
-		fmt.Printf("Selected \"%s\" (%s)\n", response.Name, response.ID)
-		return nil
+		return writeJSON(response)
 	},
 }
 
-var campaignsCreateCmd = &args.Command{
+var campaignCreateCmd = &args.Command{
 	Name: "create",
-	Help: "Create a new campaign",
+	Help: "create campaign",
 	Operands: []args.Operand{
 		{
 			Name: "name",
-			Help: "Campaign name",
+			Help: "campaign name",
 		},
 	},
 	Handler: func(i *args.Input) error {
+		// get input
 		name := i.GetOperand("name")
+
+		// validate input
+		name = strings.TrimSpace(name)
 		if name == "" {
 			return fmt.Errorf("campaign name required")
 		}
 
-		body, err := json.Marshal(
-			map[string]string{
-				"name": name,
-			},
-		)
+		// setup client
+		client, err := resolveClient(i, API_PREFIX)
 		if err != nil {
 			return err
 		}
 
-		response := service.Campaign{}
-		if err := request(i, "POST", "/admin/campaigns", body, &response); err != nil {
+		// build request
+		req := service.CreateCampaignRequest{
+			Name: name,
+		}
+		body, err := json.Marshal(req)
+		if err != nil {
+			return err
+		}
+
+		// post campaign
+		var response service.Campaign
+		if err := client.Post("/admin/campaigns", body, &response); err != nil {
 			return err
 		}
 
@@ -176,17 +85,22 @@ var campaignsCreateCmd = &args.Command{
 	},
 }
 
-var campaignsGetCmd = &args.Command{
+var campaignGetCmd = &args.Command{
 	Name: "get",
-	Help: "Get campaign details",
+	Help: "get campaign",
 	Handler: func(i *args.Input) error {
-		uuid, err := getActiveCampaign(i)
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		response := &service.Campaign{}
-		if err := request(i, "GET", fmt.Sprintf("/admin/campaigns/%s", uuid), nil, response); err != nil {
+		client, err := resolveClient(i, API_PREFIX)
+		if err != nil {
+			return err
+		}
+
+		var response service.Campaign
+		if err := client.Get("/admin/campaigns/"+id, &response); err != nil {
 			return err
 		}
 
@@ -194,56 +108,73 @@ var campaignsGetCmd = &args.Command{
 	},
 }
 
-var campaignsSetCmd = &args.Command{
-	Name: "set",
-	Help: "Update campaign name and strictness",
+var campaignUpdateCmd = &args.Command{
+	Name: "update",
+	Help: "update campaign",
 	Operands: []args.Operand{
 		{
 			Name: "name",
-			Help: "New campaign name",
+			Help: "new campaign name",
 		},
 	},
 	Options: []args.Option{
 		{
 			Long: "strict",
 			Type: args.OptionTypeFlag,
-			Help: "Disallow custom location text",
+			Help: "disallow custom location text",
 		},
 		{
 			Long: "allow-custom",
 			Type: args.OptionTypeFlag,
-			Help: "Allow custom location text",
+			Help: "allow custom location text",
 		},
 	},
 	Handler: func(i *args.Input) error {
-		uuid, err := getActiveCampaign(i)
+		// get input
+		strict := i.GetFlag("strict")
+		allowCustom := i.GetFlag("allow-custom")
+		name := i.GetOperand("name")
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		name := strings.TrimSpace(i.GetOperand("name"))
+		// validate input
+		name = strings.TrimSpace(name)
 		if name == "" {
 			return fmt.Errorf("campaign name required")
 		}
 
-		payload := map[string]any{
-			"name": name,
-		}
-
-		if i.GetFlag("strict") && i.GetFlag("allow-custom") {
+		if strict && allowCustom {
 			return fmt.Errorf("use only one of --strict or --allow-custom")
 		}
-		if i.GetFlag("strict") {
-			payload["allow_custom_text"] = false
-		}
-		if i.GetFlag("allow-custom") {
-			payload["allow_custom_text"] = true
+
+		// setup client
+		client, err := resolveClient(i, API_PREFIX)
+		if err != nil {
+			return err
 		}
 
-		body, _ := json.Marshal(payload)
+		// build request
+		payload := service.UpdateCampaignRequest{
+			Name: name,
+		}
+		if strict {
+			allowCustomText := false
+			payload.AllowCustomText = &allowCustomText
+		}
+		if allowCustom {
+			allowCustomText := true
+			payload.AllowCustomText = &allowCustomText
+		}
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
 
-		response := &service.Campaign{}
-		if err := request(i, "PUT", fmt.Sprintf("/admin/campaigns/%s", uuid), body, response); err != nil {
+		// send request
+		var response service.Campaign
+		if err := client.Put("/admin/campaigns/"+id, body, &response); err != nil {
 			return err
 		}
 
@@ -251,150 +182,128 @@ var campaignsSetCmd = &args.Command{
 	},
 }
 
-var campaignsDeleteCmd = &args.Command{
+var campaignDeleteCmd = &args.Command{
 	Name: "delete",
-	Help: "Delete campaign",
+	Help: "delete campaign",
 	Handler: func(i *args.Input) error {
-		uuid, err := getActiveCampaign(i)
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		if err := requestVoid(i, "DELETE", fmt.Sprintf("/admin/campaigns/%s", uuid), nil); err != nil {
+		client, err := resolveClient(i, API_PREFIX)
+		if err != nil {
 			return err
 		}
 
-		fmt.Println("Campaign deleted")
+		if err := client.Delete("/admin/campaigns/"+id, nil); err != nil {
+			return err
+		}
+
+		fmt.Println("campaign deleted")
 		return nil
 	},
 }
 
-var campaignsLocationsCmd = &args.Command{
+var campaignLocationsCmd = &args.Command{
 	Name: "locations",
-	Help: "Manage campaign locations",
+	Help: "manage campaign locations",
 	Subcommands: []*args.Command{
-		campaignsLocationsGetCmd,
-		campaignsLocationsSetCmd,
+		campaignLocationsGetCmd,
+		campaignLocationsSetCmd,
 	},
 }
 
-var campaignsLocationsGetCmd = &args.Command{
+var campaignLocationsGetCmd = &args.Command{
 	Name: "get",
-	Help: "Get campaign locations",
+	Help: "get campaign locations",
 	Handler: func(i *args.Input) error {
-		campaignID, err := getActiveCampaign(i)
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		locs, err := fetchCampaignLocations(i, campaignID)
+		client, err := resolveClient(i, API_PREFIX)
 		if err != nil {
 			return err
 		}
 
-		return writeJSON(locs)
+		var response service.CampaignLocationsResponse
+		if err := client.Get("/admin/campaigns/"+id+"/locations", &response); err != nil {
+			return err
+		}
+
+		return writeJSON(response)
 	},
 }
 
-var campaignsLocationsSetCmd = &args.Command{
+var campaignLocationsSetCmd = &args.Command{
 	Name: "set",
-	Help: "Replace campaign locations",
-	Options: []args.Option{
-		{
-			Long: "location",
-			Type: args.OptionTypeArray,
-			Help: "Comma-separated location values in desired order",
-		},
-	},
+	Help: "replace campaign locations",
+	Options: []args.Option{{
+		Long: "location",
+		Type: args.OptionTypeArray,
+		Help: "location values in desired display order",
+	}},
 	Handler: func(i *args.Input) error {
-		campaignID, err := getActiveCampaign(i)
+		values := i.GetArray("location")
+
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		locations := i.GetArray("location")
-		locs := make([]service.LocationOption, 0, len(locations))
-		for idx, raw := range locations {
-			value := strings.TrimSpace(raw)
-			if value == "" {
+		locations := make([]service.LocationOption, 0, len(values))
+		for idx, value := range values {
+			trimmed := strings.TrimSpace(value)
+			if trimmed == "" {
 				continue
 			}
-			locs = append(locs, service.LocationOption{
-				Value:        value,
+			locations = append(locations, service.LocationOption{
+				Value:        trimmed,
 				DisplayOrder: idx + 1,
 			})
 		}
 
-		if err := putCampaignLocations(i, campaignID, locs); err != nil {
-			return err
-		}
-
-		updated, err := fetchCampaignLocations(i, campaignID)
+		client, err := resolveClient(i, API_PREFIX)
 		if err != nil {
 			return err
 		}
 
-		return writeJSON(updated)
+		req := service.CampaignLocationsRequest{
+			Locations: locations,
+		}
+		body, err := json.Marshal(req)
+		if err != nil {
+			return err
+		}
+
+		var response service.CampaignLocationsResponse
+		if err := client.Put("/admin/campaigns/"+id+"/locations", body, &response); err != nil {
+			return err
+		}
+
+		return writeJSON(response)
 	},
 }
 
-func fetchCampaignLocations(
-	input *args.Input,
-	campaignID string,
-) ([]service.LocationOption, error) {
-	var response []service.LocationOption
-	path := fmt.Sprintf("/admin/campaigns/%s/locations", campaignID)
-	if err := request(input, "GET", path, nil, &response); err != nil {
-		return nil, err
-	}
-	return response, nil
-}
-
-func putCampaignLocations(
-	input *args.Input,
-	campaignID string,
-	locs []service.LocationOption,
-) error {
-	body, _ := json.Marshal(locs)
-	path := fmt.Sprintf("/admin/campaigns/%s/locations", campaignID)
-	return requestVoid(input, "PUT", path, body)
-}
-
-// Helper function to get active campaign UUID
-func getActiveCampaign(
-	input *args.Input,
+func resolveCampaignId(
+	i *args.Input,
 ) (
 	string,
 	error,
 ) {
-
-	// check uuid option
-	if uuid := input.GetParameter("uuid"); uuid != nil && *uuid != "" {
-		return *uuid, nil
+	opt := i.GetParameterOr("campaign-id", "")
+	opt = strings.TrimSpace(opt)
+	if opt != "" {
+		return opt, nil
 	}
 
-	// check CAMPAIGN_UUID env var
-	if uuid := os.Getenv("CAMPAIGN_UUID"); uuid != "" {
-		return uuid, nil
+	env := os.Getenv("COSIGN_CAMPAIGN_ID")
+	env = strings.TrimSpace(env)
+	if env != "" {
+		return env, nil
 	}
 
-	// check config file
-	cfg, err := envConfig(input)
-	if err != nil {
-		return "", fmt.Errorf("failed to get environment config: %w", err)
-	}
-
-	configDir := filepath.Join(
-		os.ExpandEnv("$HOME"),
-		".config/cosign",
-		cfg.GetActiveEnv(),
-	)
-
-	activePath := filepath.Join(configDir, "active_campaign")
-	data, err := os.ReadFile(activePath)
-	if err != nil {
-		return "", fmt.Errorf("no campaign selected. Run 'cosign api campaigns list' then 'cosign api campaigns select <id>'")
-	}
-
-	return string(data), nil
+	return "", fmt.Errorf("campaign id required; set --campaign-id or COSIGN_CAMPAIGN_ID")
 }

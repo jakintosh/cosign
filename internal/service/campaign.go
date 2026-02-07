@@ -1,74 +1,63 @@
 package service
 
 import (
+	"encoding/json"
+	"errors"
+	"net/http"
 	"strings"
-	"time"
 
-	"github.com/google/uuid" // from go.mod
+	"git.sr.ht/~jakintosh/command-go/pkg/wire"
 )
 
-// Campaign represents a sign-on campaign
-type Campaign struct {
-	ID              string `json:"id"`
+type CreateCampaignRequest struct {
+	Name string `json:"name"`
+}
+
+type UpdateCampaignRequest struct {
 	Name            string `json:"name"`
-	AllowCustomText bool   `json:"allow_custom_text"`
-	CreatedAt       int64  `json:"created_at"`
+	AllowCustomText *bool  `json:"allow_custom_text"`
 }
 
-// LocationOption represents a preset location option
-type LocationOption struct {
-	ID           int64  `json:"id,omitempty"`
-	Value        string `json:"value"`
-	DisplayOrder int    `json:"display_order"`
+type CampaignLocationsRequest struct {
+	Locations []LocationOption `json:"locations"`
 }
 
-// Campaigns wraps a list response with pagination metadata
-type Campaigns struct {
-	Campaigns []*Campaign `json:"campaigns"`
-	Total     int         `json:"total"`
-	Limit     int         `json:"limit"`
-	Offset    int         `json:"offset"`
+type CampaignLocationsResponse struct {
+	Locations []LocationOption `json:"locations"`
 }
 
-// CampaignStore interface for campaign data operations
-type CampaignStore interface {
-	Insert(id, name string, allowCustomText bool, createdAt int64) error
-	GetByID(id string) (*Campaign, error)
-	List(limit, offset int) ([]*Campaign, error)
-	Count() (int, error)
-	Update(id, name string, allowCustomText bool) error
-	Delete(id string) error
-	GetLocationOptions(campaignID string) ([]*LocationOption, error)
-	ReplaceLocationOptions(campaignID string, options []LocationOption) error
+func (s *Service) buildPublicCampaignRouter(mux *http.ServeMux, mw Middleware) {
+	mux.HandleFunc("GET /{campaign_id}", mw.cors(s.handleGetCampaign))
+	mux.HandleFunc("OPTIONS /{campaign_id}", mw.cors(s.handleGetCampaign))
+	mux.HandleFunc("GET /{campaign_id}/locations", mw.cors(s.handleGetCampaignLocations))
+	mux.HandleFunc("OPTIONS /{campaign_id}/locations", mw.cors(s.handleGetCampaignLocations))
 }
 
-var campaignStore CampaignStore
-
-// SetCampaignStore sets the campaign store implementation
-func SetCampaignStore(s CampaignStore) {
-	campaignStore = s
+func (s *Service) buildAdminCampaignRouter(mux *http.ServeMux, _ Middleware) {
+	mux.HandleFunc("GET /{$}", s.handleListCampaigns)
+	mux.HandleFunc("POST /{$}", s.handleCreateCampaign)
+	mux.HandleFunc("GET /{campaign_id}", s.handleGetCampaign)
+	mux.HandleFunc("PUT /{campaign_id}", s.handleUpdateCampaign)
+	mux.HandleFunc("DELETE /{campaign_id}", s.handleDeleteCampaign)
+	mux.HandleFunc("GET /{campaign_id}/locations", s.handleGetCampaignLocations)
+	mux.HandleFunc("PUT /{campaign_id}/locations", s.handleUpdateCampaignLocations)
 }
 
-// CreateCampaign creates a new campaign with a generated UUID
-func CreateCampaign(name string) (*Campaign, error) {
-	if campaignStore == nil {
-		return nil, ErrNoCampaignStore
-	}
-
-	// Validate name
+func (s *Service) CreateCampaign(name string) (*Campaign, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, ErrEmptyCampaignName
 	}
 
-	// Generate UUID
-	id := uuid.New().String()
-
-	// Create campaign with default settings
-	createdAt := time.Now().Unix()
-	err := campaignStore.Insert(id, name, true, createdAt)
+	id, err := randomID(16)
 	if err != nil {
 		return nil, err
+	}
+
+	createdAt := s.clock().Unix()
+	err = s.store.InsertCampaign(id, name, true, createdAt)
+	if err != nil {
+		return nil, DatabaseError{Err: err}
 	}
 
 	return &Campaign{
@@ -79,21 +68,18 @@ func CreateCampaign(name string) (*Campaign, error) {
 	}, nil
 }
 
-// GetCampaign retrieves a campaign by ID
-func GetCampaign(id string) (*Campaign, error) {
-	if campaignStore == nil {
-		return nil, ErrNoCampaignStore
+func (s *Service) GetCampaign(id string) (*Campaign, error) {
+	campaign, err := s.store.GetCampaign(id)
+	if err != nil {
+		if errors.Is(err, ErrCampaignNotFound) {
+			return nil, err
+		}
+		return nil, DatabaseError{Err: err}
 	}
-	return campaignStore.GetByID(id)
+	return campaign, nil
 }
 
-// ListCampaigns retrieves all campaigns with pagination and total count
-func ListCampaigns(limit, offset int) (*Campaigns, error) {
-	if campaignStore == nil {
-		return nil, ErrNoCampaignStore
-	}
-
-	// Default pagination
+func (s *Service) ListCampaigns(limit, offset int) (*Campaigns, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -101,14 +87,14 @@ func ListCampaigns(limit, offset int) (*Campaigns, error) {
 		offset = 0
 	}
 
-	campaigns, err := campaignStore.List(limit, offset)
+	campaigns, err := s.store.ListCampaigns(limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, DatabaseError{Err: err}
 	}
 
-	total, err := campaignStore.Count()
+	total, err := s.store.CountCampaigns()
 	if err != nil {
-		return nil, err
+		return nil, DatabaseError{Err: err}
 	}
 
 	return &Campaigns{
@@ -119,38 +105,42 @@ func ListCampaigns(limit, offset int) (*Campaigns, error) {
 	}, nil
 }
 
-// UpdateCampaign updates a campaign's name and config
-func UpdateCampaign(id, name string, allowCustomText bool) error {
-	if campaignStore == nil {
-		return ErrNoCampaignStore
-	}
-
-	// Validate name
+func (s *Service) UpdateCampaign(id, name string, allowCustomText bool) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ErrEmptyCampaignName
 	}
 
-	return campaignStore.Update(id, name, allowCustomText)
-}
-
-// DeleteCampaign removes a campaign by ID
-func DeleteCampaign(id string) error {
-	if campaignStore == nil {
-		return ErrNoCampaignStore
-	}
-	return campaignStore.Delete(id)
-}
-
-// GetCampaignLocations returns the location options for a campaign.
-func GetCampaignLocations(campaignID string) ([]LocationOption, error) {
-	if campaignStore == nil {
-		return nil, ErrNoCampaignStore
-	}
-
-	options, err := campaignStore.GetLocationOptions(campaignID)
+	err := s.store.UpdateCampaign(id, name, allowCustomText)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrCampaignNotFound) {
+			return err
+		}
+		return DatabaseError{Err: err}
+	}
+
+	return nil
+}
+
+func (s *Service) DeleteCampaign(id string) error {
+	err := s.store.DeleteCampaign(id)
+	if err != nil {
+		if errors.Is(err, ErrCampaignNotFound) {
+			return err
+		}
+		return DatabaseError{Err: err}
+	}
+
+	return nil
+}
+
+func (s *Service) GetCampaignLocations(campaignID string) ([]LocationOption, error) {
+	options, err := s.store.GetCampaignLocations(campaignID)
+	if err != nil {
+		if errors.Is(err, ErrCampaignNotFound) {
+			return nil, err
+		}
+		return nil, DatabaseError{Err: err}
 	}
 
 	locations := make([]LocationOption, 0, len(options))
@@ -164,17 +154,220 @@ func GetCampaignLocations(campaignID string) ([]LocationOption, error) {
 	return locations, nil
 }
 
-// SetCampaignLocations replaces the location options for a campaign.
-func SetCampaignLocations(campaignID string, options []LocationOption) error {
-	if campaignStore == nil {
-		return ErrNoCampaignStore
-	}
-
-	for _, loc := range options {
-		if strings.TrimSpace(loc.Value) == "" {
+func (s *Service) SetCampaignLocations(campaignID string, options []LocationOption) error {
+	normalized := make([]LocationOption, 0, len(options))
+	for idx, loc := range options {
+		value := strings.TrimSpace(loc.Value)
+		if value == "" {
 			return ErrEmptyLocation
 		}
+
+		displayOrder := loc.DisplayOrder
+		if displayOrder <= 0 {
+			displayOrder = idx + 1
+		}
+
+		normalized = append(normalized, LocationOption{
+			Value:        value,
+			DisplayOrder: displayOrder,
+		})
 	}
 
-	return campaignStore.ReplaceLocationOptions(campaignID, options)
+	err := s.store.ReplaceCampaignLocations(campaignID, normalized)
+	if err != nil {
+		if errors.Is(err, ErrCampaignNotFound) {
+			return err
+		}
+		return DatabaseError{Err: err}
+	}
+
+	return nil
+}
+
+func (s *Service) handleCreateCampaign(w http.ResponseWriter, r *http.Request) {
+	var req CreateCampaignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		wire.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	campaign, err := s.CreateCampaign(req.Name)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrEmptyCampaignName):
+			wire.WriteError(w, http.StatusBadRequest, err.Error())
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to create campaign")
+		}
+		return
+	}
+
+	wire.WriteData(w, http.StatusCreated, campaign)
+}
+
+func (s *Service) handleListCampaigns(w http.ResponseWriter, r *http.Request) {
+	limit, offset, malformed := wire.ParsePagination(r)
+	if malformed != nil {
+		wire.WriteError(w, http.StatusBadRequest, malformed.Error())
+		return
+	}
+
+	campaigns, err := s.ListCampaigns(limit, offset)
+	if err != nil {
+		wire.WriteError(w, http.StatusInternalServerError, "failed to list campaigns")
+		return
+	}
+
+	wire.WriteData(w, http.StatusOK, campaigns)
+}
+
+func (s *Service) handleGetCampaign(w http.ResponseWriter, r *http.Request) {
+	campaignID := campaignIDFromPath(r)
+	if campaignID == "" {
+		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
+		return
+	}
+
+	campaign, err := s.GetCampaign(campaignID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCampaignNotFound):
+			wire.WriteError(w, http.StatusNotFound, "campaign not found")
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to load campaign")
+		}
+		return
+	}
+
+	wire.WriteData(w, http.StatusOK, campaign)
+}
+
+func (s *Service) handleUpdateCampaign(w http.ResponseWriter, r *http.Request) {
+	campaignID := campaignIDFromPath(r)
+	if campaignID == "" {
+		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
+		return
+	}
+
+	var req UpdateCampaignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		wire.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	existing, err := s.GetCampaign(campaignID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCampaignNotFound):
+			wire.WriteError(w, http.StatusNotFound, "campaign not found")
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to load campaign")
+		}
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = existing.Name
+	}
+
+	allowCustomText := existing.AllowCustomText
+	if req.AllowCustomText != nil {
+		allowCustomText = *req.AllowCustomText
+	}
+
+	if err := s.UpdateCampaign(campaignID, name, allowCustomText); err != nil {
+		switch {
+		case errors.Is(err, ErrCampaignNotFound):
+			wire.WriteError(w, http.StatusNotFound, "campaign not found")
+		case errors.Is(err, ErrEmptyCampaignName):
+			wire.WriteError(w, http.StatusBadRequest, err.Error())
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to update campaign")
+		}
+		return
+	}
+
+	updated, err := s.GetCampaign(campaignID)
+	if err != nil {
+		wire.WriteError(w, http.StatusInternalServerError, "failed to reload campaign")
+		return
+	}
+
+	wire.WriteData(w, http.StatusOK, updated)
+}
+
+func (s *Service) handleDeleteCampaign(w http.ResponseWriter, r *http.Request) {
+	campaignID := campaignIDFromPath(r)
+	if campaignID == "" {
+		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
+		return
+	}
+
+	if err := s.DeleteCampaign(campaignID); err != nil {
+		switch {
+		case errors.Is(err, ErrCampaignNotFound):
+			wire.WriteError(w, http.StatusNotFound, "campaign not found")
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to delete campaign")
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) handleGetCampaignLocations(w http.ResponseWriter, r *http.Request) {
+	campaignID := campaignIDFromPath(r)
+	if campaignID == "" {
+		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
+		return
+	}
+
+	locations, err := s.GetCampaignLocations(campaignID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrCampaignNotFound):
+			wire.WriteError(w, http.StatusNotFound, "campaign not found")
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to get campaign locations")
+		}
+		return
+	}
+
+	wire.WriteData(w, http.StatusOK, CampaignLocationsResponse{Locations: locations})
+}
+
+func (s *Service) handleUpdateCampaignLocations(w http.ResponseWriter, r *http.Request) {
+	campaignID := campaignIDFromPath(r)
+	if campaignID == "" {
+		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
+		return
+	}
+
+	var req CampaignLocationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		wire.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := s.SetCampaignLocations(campaignID, req.Locations); err != nil {
+		switch {
+		case errors.Is(err, ErrCampaignNotFound):
+			wire.WriteError(w, http.StatusNotFound, "campaign not found")
+		case errors.Is(err, ErrEmptyLocation):
+			wire.WriteError(w, http.StatusBadRequest, err.Error())
+		default:
+			wire.WriteError(w, http.StatusInternalServerError, "failed to update campaign locations")
+		}
+		return
+	}
+
+	updated, err := s.GetCampaignLocations(campaignID)
+	if err != nil {
+		wire.WriteError(w, http.StatusInternalServerError, "failed to load updated campaign locations")
+		return
+	}
+
+	wire.WriteData(w, http.StatusOK, CampaignLocationsResponse{Locations: updated})
 }

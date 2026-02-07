@@ -2,60 +2,83 @@ package database
 
 import (
 	"cosign/internal/service"
+	"database/sql"
 	"fmt"
 )
 
-// DBCampaignStore implements CampaignStore interface
-type DBCampaignStore struct{}
-
-// NewCampaignStore creates a new campaign store
-func NewCampaignStore() DBCampaignStore {
-	return DBCampaignStore{}
-}
-
-// Insert creates a new campaign
-func (DBCampaignStore) Insert(id, name string, allowCustomText bool, createdAt int64) error {
+func (db *DB) InsertCampaign(
+	id string,
+	name string,
+	allowCustomText bool,
+	createdAt int64,
+) error {
 	allowInt := 0
 	if allowCustomText {
 		allowInt = 1
 	}
 
-	_, err := DB().Exec(
-		`INSERT INTO campaigns (id, name, allow_custom_text, created_at) VALUES (?1, ?2, ?3, ?4)`,
-		id, name, allowInt, createdAt,
+	_, err := db.Conn.Exec(`
+		INSERT INTO campaigns (id, name, allow_custom_text, created_at)
+		VALUES (?1, ?2, ?3, ?4)`,
+		id,
+		name,
+		allowInt,
+		createdAt,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to insert campaign: %w", err)
+		return fmt.Errorf("insert campaign: %w", err)
 	}
 	return nil
 }
 
-// GetByID retrieves a campaign by ID
-func (DBCampaignStore) GetByID(id string) (*service.Campaign, error) {
-	row := DB().QueryRow(
-		`SELECT id, name, allow_custom_text, created_at FROM campaigns WHERE id = ?1`,
+func (db *DB) GetCampaign(
+	id string,
+) (
+	*service.Campaign,
+	error,
+) {
+	row := db.Conn.QueryRow(`
+		SELECT id, name, allow_custom_text, created_at
+		FROM campaigns
+		WHERE id = ?1`,
 		id,
 	)
 
 	var campaign service.Campaign
 	var allowInt int
-	err := row.Scan(&campaign.ID, &campaign.Name, &allowInt, &campaign.CreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get campaign: %w", err)
+	if err := row.Scan(
+		&campaign.ID,
+		&campaign.Name,
+		&allowInt,
+		&campaign.CreatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrCampaignNotFound
+		}
+		return nil, fmt.Errorf("get campaign: %w", err)
 	}
 
 	campaign.AllowCustomText = allowInt == 1
 	return &campaign, nil
 }
 
-// List retrieves campaigns with pagination
-func (DBCampaignStore) List(limit, offset int) ([]*service.Campaign, error) {
-	rows, err := DB().Query(
-		`SELECT id, name, allow_custom_text, created_at FROM campaigns ORDER BY created_at DESC LIMIT ?1 OFFSET ?2`,
-		limit, offset,
+func (db *DB) ListCampaigns(
+	limit int,
+	offset int,
+) (
+	[]*service.Campaign,
+	error,
+) {
+	rows, err := db.Conn.Query(`
+		SELECT id, name, allow_custom_text, created_at
+		FROM campaigns
+		ORDER BY created_at DESC
+		LIMIT ?1 OFFSET ?2`,
+		limit,
+		offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query campaigns: %w", err)
+		return nil, fmt.Errorf("list campaigns: %w", err)
 	}
 	defer rows.Close()
 
@@ -63,48 +86,67 @@ func (DBCampaignStore) List(limit, offset int) ([]*service.Campaign, error) {
 	for rows.Next() {
 		var campaign service.Campaign
 		var allowInt int
-		if err := rows.Scan(&campaign.ID, &campaign.Name, &allowInt, &campaign.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan campaign: %w", err)
+		if err := rows.Scan(
+			&campaign.ID,
+			&campaign.Name,
+			&allowInt,
+			&campaign.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan campaign: %w", err)
 		}
 		campaign.AllowCustomText = allowInt == 1
 		campaigns = append(campaigns, &campaign)
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating campaigns: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate campaigns: %w", err)
 	}
 
 	return campaigns, nil
 }
 
-// Count returns the total number of campaigns
-func (DBCampaignStore) Count() (int, error) {
+func (db *DB) CountCampaigns() (
+	int,
+	error,
+) {
+	row := db.Conn.QueryRow(`
+		SELECT COUNT(*)
+		FROM campaigns`,
+	)
+
 	var count int
-	err := DB().QueryRow(`SELECT COUNT(*) FROM campaigns`).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count campaigns: %w", err)
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("count campaigns: %w", err)
 	}
 	return count, nil
 }
 
-// Update modifies a campaign
-func (DBCampaignStore) Update(id, name string, allowCustomText bool) error {
+func (db *DB) UpdateCampaign(
+	id string,
+	name string,
+	allowCustomText bool,
+) error {
 	allowInt := 0
 	if allowCustomText {
 		allowInt = 1
 	}
 
-	result, err := DB().Exec(
-		`UPDATE campaigns SET name = ?1, allow_custom_text = ?2 WHERE id = ?3`,
-		name, allowInt, id,
+	result, err := db.Conn.Exec(`
+		UPDATE campaigns
+		SET name = ?1,
+			allow_custom_text = ?2
+		WHERE id = ?3`,
+		name,
+		allowInt,
+		id,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to update campaign: %w", err)
+		return fmt.Errorf("update campaign: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("rows affected for campaign update: %w", err)
 	}
 	if rowsAffected == 0 {
 		return service.ErrCampaignNotFound
@@ -113,16 +155,21 @@ func (DBCampaignStore) Update(id, name string, allowCustomText bool) error {
 	return nil
 }
 
-// Delete removes a campaign
-func (DBCampaignStore) Delete(id string) error {
-	result, err := DB().Exec(`DELETE FROM campaigns WHERE id = ?1`, id)
+func (db *DB) DeleteCampaign(
+	id string,
+) error {
+	result, err := db.Conn.Exec(`
+		DELETE FROM campaigns
+		WHERE id = ?1`,
+		id,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to delete campaign: %w", err)
+		return fmt.Errorf("delete campaign: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return fmt.Errorf("rows affected for campaign delete: %w", err)
 	}
 	if rowsAffected == 0 {
 		return service.ErrCampaignNotFound
@@ -131,72 +178,106 @@ func (DBCampaignStore) Delete(id string) error {
 	return nil
 }
 
-// GetLocationOptions returns location options for a campaign.
-func (DBCampaignStore) GetLocationOptions(campaignID string) ([]*service.LocationOption, error) {
+func (db *DB) GetCampaignLocations(
+	campaignID string,
+) (
+	[]*service.LocationOption,
+	error,
+) {
+	row := db.Conn.QueryRow(`
+		SELECT COUNT(*)
+		FROM campaigns
+		WHERE id = ?1`,
+		campaignID,
+	)
+
 	var exists int
-	if err := DB().QueryRow(`SELECT COUNT(*) FROM campaigns WHERE id = ?1`, campaignID).Scan(&exists); err != nil {
-		return nil, fmt.Errorf("failed to verify campaign: %w", err)
+	if err := row.Scan(&exists); err != nil {
+		return nil, fmt.Errorf("verify campaign exists: %w", err)
 	}
 	if exists == 0 {
 		return nil, service.ErrCampaignNotFound
 	}
 
-	rows, err := DB().Query(
-		`SELECT id, value, display_order FROM locations WHERE campaign_id = ?1 ORDER BY display_order ASC`,
+	rows, err := db.Conn.Query(`
+		SELECT id, value, display_order
+		FROM locations
+		WHERE campaign_id = ?1
+		ORDER BY display_order ASC`,
 		campaignID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get location options: %w", err)
+		return nil, fmt.Errorf("get campaign locations: %w", err)
 	}
 	defer rows.Close()
 
 	var options []*service.LocationOption
 	for rows.Next() {
 		var opt service.LocationOption
-		if err := rows.Scan(&opt.ID, &opt.Value, &opt.DisplayOrder); err != nil {
-			return nil, fmt.Errorf("failed to scan location option: %w", err)
+		if err := rows.Scan(
+			&opt.ID,
+			&opt.Value,
+			&opt.DisplayOrder,
+		); err != nil {
+			return nil, fmt.Errorf("scan campaign location: %w", err)
 		}
 		options = append(options, &opt)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("row iteration error: %w", err)
+		return nil, fmt.Errorf("iterate campaign locations: %w", err)
 	}
 
 	return options, nil
 }
 
-// ReplaceLocationOptions replaces location options for a campaign transactionally.
-func (DBCampaignStore) ReplaceLocationOptions(campaignID string, options []service.LocationOption) error {
-	tx, err := DB().Begin()
+func (db *DB) ReplaceCampaignLocations(
+	campaignID string,
+	options []service.LocationOption,
+) error {
+	tx, err := db.Conn.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("begin replace locations transaction: %w", err)
 	}
 	defer tx.Rollback()
 
+	row := tx.QueryRow(`
+		SELECT COUNT(*)
+		FROM campaigns
+		WHERE id = ?1`,
+		campaignID,
+	)
+
 	var exists int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM campaigns WHERE id = ?1`, campaignID).Scan(&exists); err != nil {
-		return fmt.Errorf("failed to verify campaign: %w", err)
+	if err := row.Scan(&exists); err != nil {
+		return fmt.Errorf("verify campaign exists: %w", err)
 	}
 	if exists == 0 {
 		return service.ErrCampaignNotFound
 	}
 
-	if _, err := tx.Exec(`DELETE FROM locations WHERE campaign_id = ?1`, campaignID); err != nil {
-		return fmt.Errorf("failed to clear location options: %w", err)
+	if _, err := tx.Exec(`
+		DELETE FROM locations
+		WHERE campaign_id = ?1`,
+		campaignID,
+	); err != nil {
+		return fmt.Errorf("clear campaign locations: %w", err)
 	}
 
 	for _, opt := range options {
-		if _, err := tx.Exec(
-			`INSERT INTO locations (campaign_id, value, display_order) VALUES (?1, ?2, ?3)`,
-			campaignID, opt.Value, opt.DisplayOrder,
+		if _, err := tx.Exec(`
+			INSERT INTO locations (campaign_id, value, display_order)
+			VALUES (?1, ?2, ?3)`,
+			campaignID,
+			opt.Value,
+			opt.DisplayOrder,
 		); err != nil {
-			return fmt.Errorf("failed to insert location option: %w", err)
+			return fmt.Errorf("insert campaign location: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit config update: %w", err)
+		return fmt.Errorf("commit replace locations: %w", err)
 	}
 
 	return nil

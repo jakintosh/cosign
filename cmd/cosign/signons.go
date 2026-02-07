@@ -5,48 +5,61 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"cosign/internal/service"
-	cmd "git.sr.ht/~jakintosh/command-go/pkg/args"
+	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var signonsCmd = &cmd.Command{
+var signonsCmd = &args.Command{
 	Name: "signons",
-	Help: "Manage sign-ons",
-	Subcommands: []*cmd.Command{
+	Help: "manage sign-ons",
+	Subcommands: []*args.Command{
 		signonsListCmd,
 		signonsExportCmd,
 	},
 }
 
-var signonsListCmd = &cmd.Command{
+var signonsListCmd = &args.Command{
 	Name: "list",
-	Help: "List all sign-ons",
-	Options: []cmd.Option{
-		{Long: "limit", Type: cmd.OptionTypeParameter, Help: "Limit number of results"},
-		{Long: "offset", Type: cmd.OptionTypeParameter, Help: "Offset for pagination"},
+	Help: "list campaign sign-ons",
+	Options: []args.Option{
+		{
+			Long: "limit",
+			Type: args.OptionTypeParameter,
+			Help: "page size",
+		},
+		{
+			Long: "offset",
+			Type: args.OptionTypeParameter,
+			Help: "page offset",
+		},
 	},
-	Handler: func(input *cmd.Input) error {
-		campaignID, err := getActiveCampaign(input)
+	Handler: func(i *args.Input) error {
+		limit := i.GetIntParameterOr("limit", 100)
+		offset := i.GetIntParameterOr("offset", 0)
+
+		if limit < 1 {
+			return fmt.Errorf("limit must be at least 1")
+		}
+		if offset < 0 {
+			return fmt.Errorf("offset must not be negative")
+		}
+
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		limit := "100"
-		if l := input.GetParameter("limit"); l != nil {
-			limit = *l
-		}
-		offset := "0"
-		if o := input.GetParameter("offset"); o != nil {
-			offset = *o
+		client, err := resolveClient(i, API_PREFIX)
+		if err != nil {
+			return err
 		}
 
-		path := fmt.Sprintf("/admin/campaigns/%s/signons?limit=%s&offset=%s", campaignID, limit, offset)
-
-		response := &service.Signons{}
-
-		if err := request(input, "GET", path, nil, response); err != nil {
+		var response service.Signons
+		path := fmt.Sprintf("/admin/campaigns/%s/signons?limit=%d&offset=%d", id, limit, offset)
+		if err := client.Get(path, &response); err != nil {
 			return err
 		}
 
@@ -54,53 +67,59 @@ var signonsListCmd = &cmd.Command{
 	},
 }
 
-var signonsExportCmd = &cmd.Command{
+var signonsExportCmd = &args.Command{
 	Name: "export",
-	Help: "Export sign-ons to CSV",
-	Options: []cmd.Option{
-		{Short: 'o', Long: "output", Type: cmd.OptionTypeParameter, Help: "Output file path"},
+	Help: "export campaign sign-ons to CSV",
+	Options: []args.Option{
+		{
+			Short: 'o',
+			Long:  "output",
+			Type:  args.OptionTypeParameter,
+			Help:  "output file path",
+		},
 	},
-	Handler: func(input *cmd.Input) error {
-		campaignID, err := getActiveCampaign(input)
+	Handler: func(i *args.Input) error {
+		rawOutput := i.GetParameterOr("output", "signons.csv")
+
+		id, err := resolveCampaignId(i)
 		if err != nil {
 			return err
 		}
 
-		output := "signons.csv"
-		if o := input.GetParameter("output"); o != nil {
-			output = *o
+		output := strings.TrimSpace(rawOutput)
+		if output == "" {
+			return fmt.Errorf("output file path required")
 		}
 
-		response := &service.Signons{}
-
-		path := fmt.Sprintf("/admin/campaigns/%s/signons", campaignID)
-		if err := request(input, "GET", path, nil, response); err != nil {
+		client, err := resolveClient(i, API_PREFIX)
+		if err != nil {
 			return err
 		}
 
-		// Create CSV file
+		var response service.Signons
+		if err := client.Get("/admin/campaigns/"+id+"/signons", &response); err != nil {
+			return err
+		}
+
 		file, err := os.Create(output)
 		if err != nil {
-			return fmt.Errorf("failed to create file: %w", err)
+			return fmt.Errorf("create output file: %w", err)
 		}
 		defer file.Close()
 
 		writer := csv.NewWriter(file)
-		defer writer.Flush()
 
-		// Write header
-		if err := writer.Write([]string{"ID", "Name", "Email", "Location", "Created At"}); err != nil {
+		if err := writer.Write([]string{"id", "name", "email", "location", "created_at"}); err != nil {
 			return err
 		}
 
-		// Write rows
-		for _, s := range response.Signons {
-			createdAt := time.Unix(s.CreatedAt, 0).Format(time.RFC3339)
+		for _, signon := range response.Signons {
+			createdAt := time.Unix(signon.CreatedAt, 0).UTC().Format(time.RFC3339)
 			row := []string{
-				strconv.FormatInt(s.ID, 10),
-				s.Name,
-				s.Email,
-				s.Location,
+				strconv.FormatInt(signon.ID, 10),
+				signon.Name,
+				signon.Email,
+				signon.Location,
 				createdAt,
 			}
 			if err := writer.Write(row); err != nil {
@@ -108,7 +127,12 @@ var signonsExportCmd = &cmd.Command{
 			}
 		}
 
-		fmt.Printf("Exported %d sign-ons to %s\n", len(response.Signons), output)
+		writer.Flush()
+		if err := writer.Error(); err != nil {
+			return err
+		}
+
+		fmt.Printf("exported %d sign-ons to %s\n", len(response.Signons), output)
 		return nil
 	},
 }

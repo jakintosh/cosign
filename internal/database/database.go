@@ -4,10 +4,21 @@ import (
 	"database/sql"
 	"fmt"
 
+	"git.sr.ht/~jakintosh/command-go/pkg/cors"
+	"git.sr.ht/~jakintosh/command-go/pkg/keys"
 	_ "modernc.org/sqlite"
 )
 
-var db *sql.DB
+type Options struct {
+	Path string
+	WAL  bool
+}
+
+type DB struct {
+	Conn      *sql.DB
+	KeysStore *keys.SQLStore
+	CORSStore *cors.SQLStore
+}
 
 type migration struct {
 	version int
@@ -27,7 +38,7 @@ var migrations = []migration{
 
 			CREATE TABLE IF NOT EXISTS locations (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				campaign_id TEXT NOT NULL,
+				campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
 				value TEXT NOT NULL,
 				display_order INTEGER NOT NULL,
 				UNIQUE(campaign_id, value)
@@ -36,7 +47,7 @@ var migrations = []migration{
 
 			CREATE TABLE IF NOT EXISTS signons (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				campaign_id TEXT NOT NULL,
+				campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
 				name TEXT NOT NULL,
 				email TEXT NOT NULL,
 				location TEXT NOT NULL,
@@ -45,117 +56,153 @@ var migrations = []migration{
 			);
 			CREATE INDEX IF NOT EXISTS idx_signons_campaign ON signons(campaign_id);
 			CREATE INDEX IF NOT EXISTS idx_signons_campaign_created ON signons(campaign_id, created_at);
-
-			CREATE TABLE IF NOT EXISTS api_key (
-				id TEXT NOT NULL PRIMARY KEY,
-				salt TEXT NOT NULL,
-				hash TEXT NOT NULL,
-				created INTEGER,
-				last_used INTEGER
-			);
-
-			CREATE TABLE IF NOT EXISTS allowed_origin (
-				url TEXT NOT NULL PRIMARY KEY
-			);
 		`,
 	},
 }
 
-// Init initializes the database connection and runs migrations
-func Init(dbPath string, useWAL bool) error {
-	var err error
-	db, err = sql.Open("sqlite", dbPath)
+func Open(
+	opts Options,
+) (
+	*DB,
+	error,
+) {
+	conn, err := sql.Open("sqlite", opts.Path)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	// Configure SQLite
-	db.SetMaxOpenConns(1) // Serial writes
-
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		return fmt.Errorf("failed to set busy_timeout: %w", err)
+	if err := configure(conn, opts.WAL); err != nil {
+		conn.Close()
+		return nil, err
 	}
 
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		return fmt.Errorf("failed to enable foreign keys: %w", err)
+	if err := runMigrations(conn); err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	keyStore, err := keys.NewSQL(conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("create keys store: %w", err)
+	}
+
+	corsStore, err := cors.NewSQL(conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("create cors store: %w", err)
+	}
+
+	return &DB{
+		Conn:      conn,
+		KeysStore: keyStore,
+		CORSStore: corsStore,
+	}, nil
+}
+
+func (db *DB) Close() error {
+	if db == nil || db.Conn == nil {
+		return nil
+	}
+	return db.Conn.Close()
+}
+
+func configure(
+	conn *sql.DB,
+	useWAL bool,
+) error {
+	conn.SetMaxOpenConns(1)
+
+	if _, err := conn.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return fmt.Errorf("set busy_timeout: %w", err)
+	}
+
+	if _, err := conn.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		return fmt.Errorf("enable foreign keys: %w", err)
 	}
 
 	if useWAL {
-		if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-			return fmt.Errorf("failed to enable WAL: %w", err)
+		if _, err := conn.Exec("PRAGMA journal_mode=WAL"); err != nil {
+			return fmt.Errorf("enable wal: %w", err)
 		}
-	}
-
-	// Run migrations
-	if err := runMigrations(); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return nil
 }
 
-func runMigrations() error {
-	current := getSchemaVersion()
-	for _, m := range migrations {
-		if m.version > current {
-			if _, err := db.Exec(m.sql); err != nil {
-				return fmt.Errorf("migration %d failed: %w", m.version, err)
-			}
-			if err := setSchemaVersion(m.version); err != nil {
-				return fmt.Errorf("failed to update schema version: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-func getSchemaVersion() int {
-	var version int
-	err := db.QueryRow("PRAGMA user_version").Scan(&version)
+func runMigrations(
+	conn *sql.DB,
+) error {
+	current, err := getSchemaVersion(conn)
 	if err != nil {
-		return 0
+		return err
 	}
-	return version
+
+	for _, m := range migrations {
+		if m.version <= current {
+			continue
+		}
+
+		if _, err := conn.Exec(m.sql); err != nil {
+			return fmt.Errorf("migration %d failed: %w", m.version, err)
+		}
+
+		if err := setSchemaVersion(conn, m.version); err != nil {
+			return fmt.Errorf("set schema version %d: %w", m.version, err)
+		}
+	}
+
+	return nil
 }
 
-func setSchemaVersion(version int) error {
-	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", version))
+func getSchemaVersion(
+	conn *sql.DB,
+) (
+	int,
+	error,
+) {
+	var version int
+	if err := conn.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return 0, fmt.Errorf("read schema version: %w", err)
+	}
+	return version, nil
+}
+
+func setSchemaVersion(
+	conn *sql.DB,
+	version int,
+) error {
+	_, err := conn.Exec(fmt.Sprintf("PRAGMA user_version = %d", version))
 	return err
 }
 
-// HealthCheck performs a transactional health probe
-func HealthCheck() error {
-	tx, err := db.Begin()
+func (db *DB) HealthCheck() error {
+	tx, err := db.Conn.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Create temp table
 	if _, err := tx.Exec("CREATE TEMP TABLE health_check (id INTEGER)"); err != nil {
-		return fmt.Errorf("failed to create temp table: %w", err)
+		return fmt.Errorf("create temp table: %w", err)
 	}
 
-	// Insert row
 	if _, err := tx.Exec("INSERT INTO health_check (id) VALUES (1)"); err != nil {
-		return fmt.Errorf("failed to insert: %w", err)
+		return fmt.Errorf("insert into temp table: %w", err)
 	}
 
-	// Read row
 	var id int
 	if err := tx.QueryRow("SELECT id FROM health_check WHERE id = 1").Scan(&id); err != nil {
-		return fmt.Errorf("failed to read: %w", err)
+		return fmt.Errorf("select from temp table: %w", err)
 	}
 
-	// Drop table
 	if _, err := tx.Exec("DROP TABLE health_check"); err != nil {
-		return fmt.Errorf("failed to drop temp table: %w", err)
+		return fmt.Errorf("drop temp table: %w", err)
 	}
 
-	return tx.Commit()
-}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit health check transaction: %w", err)
+	}
 
-// DB returns the database connection for use by store implementations
-func DB() *sql.DB {
-	return db
+	return nil
 }
