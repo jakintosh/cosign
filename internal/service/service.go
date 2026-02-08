@@ -20,9 +20,9 @@ import (
 
 var (
 	ErrCampaignNotFound     = errors.New("campaign not found")
-	ErrSignonNotFound       = errors.New("sign-on not found")
+	ErrSignatureNotFound    = errors.New("signature not found")
 	ErrInvalidEmail         = errors.New("invalid email address")
-	ErrDuplicateEmail       = errors.New("email already signed on")
+	ErrDuplicateEmail       = errors.New("email already signed")
 	ErrLocationNotInOptions = errors.New("location must be from preset options")
 	ErrEmptyName            = errors.New("name cannot be empty")
 	ErrEmptyEmail           = errors.New("email cannot be empty")
@@ -55,7 +55,7 @@ type Campaigns struct {
 	Offset    int         `json:"offset"`
 }
 
-type Signon struct {
+type Signature struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
 	Email     string `json:"email"`
@@ -63,11 +63,11 @@ type Signon struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-type Signons struct {
-	Signons []*Signon `json:"signons"`
-	Total   int       `json:"total"`
-	Limit   int       `json:"limit"`
-	Offset  int       `json:"offset"`
+type Signatures struct {
+	Signatures []*Signature `json:"signatures"`
+	Total      int          `json:"total"`
+	Limit      int          `json:"limit"`
+	Offset     int          `json:"offset"`
 }
 
 type HealthResponse struct {
@@ -84,12 +84,12 @@ type Store interface {
 	GetCampaignLocations(campaignID string) ([]*LocationOption, error)
 	ReplaceCampaignLocations(campaignID string, options []LocationOption) error
 
-	InsertSignon(campaignID, name, email, location string, createdAt int64) (int64, error)
-	GetSignon(campaignID string, id int64) (*Signon, error)
-	ListSignons(campaignID string, limit, offset int) ([]*Signon, error)
-	CountSignons(campaignID string) (int, error)
-	DeleteSignon(campaignID string, id int64) error
-	SignonEmailExists(campaignID, email string) (bool, error)
+	InsertSignature(campaignID, name, email, location string, createdAt int64) (int64, error)
+	GetSignature(campaignID string, id int64) (*Signature, error)
+	ListSignatures(campaignID string, limit, offset int) ([]*Signature, error)
+	CountSignatures(campaignID string) (int, error)
+	DeleteSignature(campaignID string, id int64) error
+	SignatureEmailExists(campaignID, email string) (bool, error)
 }
 
 type Options struct {
@@ -220,10 +220,10 @@ func campaignIDFromPath(r *http.Request) string {
 	return strings.TrimSpace(r.PathValue("campaign_id"))
 }
 
-func signonIDFromPath(r *http.Request) (int64, error) {
-	v := strings.TrimSpace(r.PathValue("signon_id"))
+func signatureIDFromPath(r *http.Request) (int64, error) {
+	v := strings.TrimSpace(r.PathValue("signature_id"))
 	if v == "" {
-		return 0, fmt.Errorf("missing sign-on id")
+		return 0, fmt.Errorf("missing signature id")
 	}
 	return strconv.ParseInt(v, 10, 64)
 }

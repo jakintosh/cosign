@@ -22,7 +22,7 @@ func main() {
 
 var root = &args.Command{
 	Name: BIN_NAME,
-	Help: "public letter sign-on management system",
+	Help: "public letter signature management system",
 	Config: &args.Config{
 		Author: AUTHOR,
 		HelpOption: &args.HelpOption{

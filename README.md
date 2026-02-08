@@ -1,6 +1,6 @@
 # Cosign
 
-Cosign is a small Go service and CLI for managing public sign-on campaigns.
+Cosign is a small Go service and CLI for managing public signature campaigns.
 
 It follows the Pollinator style architecture:
 
@@ -42,8 +42,8 @@ All routes are mounted at `/api/v1`.
 - `GET /health`
 - `GET /campaigns/{campaign_id}`
 - `GET /campaigns/{campaign_id}/locations`
-- `GET /campaigns/{campaign_id}/signons`
-- `POST /campaigns/{campaign_id}/signons`
+- `GET /campaigns/{campaign_id}/signatures`
+- `POST /campaigns/{campaign_id}/signatures`
 
 Public campaign routes enforce CORS whitelist checks.
 
@@ -56,8 +56,8 @@ Public campaign routes enforce CORS whitelist checks.
 - `DELETE /admin/campaigns/{campaign_id}`
 - `GET /admin/campaigns/{campaign_id}/locations`
 - `PUT /admin/campaigns/{campaign_id}/locations`
-- `GET /admin/campaigns/{campaign_id}/signons`
-- `DELETE /admin/campaigns/{campaign_id}/signons/{signon_id}`
+- `GET /admin/campaigns/{campaign_id}/signatures`
+- `DELETE /admin/campaigns/{campaign_id}/signatures/{signature_id}`
 
 ### Settings Routes (API Key Required)
 
@@ -104,11 +104,11 @@ cosign --campaign-id <id> api campaign update "Open Letter 2026" --strict
 cosign --campaign-id <id> api campaign locations set --location "New York" --location "Boston"
 ```
 
-### Sign-on Commands
+### Signature Commands
 
 ```bash
-cosign --campaign-id <id> api signons list --limit 100 --offset 0
-cosign --campaign-id <id> api signons export -o signons.csv
+cosign --campaign-id <id> api signatures list --limit 100 --offset 0
+cosign --campaign-id <id> api signatures export -o signatures.csv
 ```
 
 ### Settings Commands

@@ -45,7 +45,7 @@ var migrations = []migration{
 			);
 			CREATE INDEX IF NOT EXISTS idx_locations_campaign_order ON locations(campaign_id, display_order);
 
-			CREATE TABLE IF NOT EXISTS signons (
+			CREATE TABLE IF NOT EXISTS signatures (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
 				campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
 				name TEXT NOT NULL,
@@ -54,8 +54,8 @@ var migrations = []migration{
 				created_at INTEGER NOT NULL,
 				UNIQUE(campaign_id, email)
 			);
-			CREATE INDEX IF NOT EXISTS idx_signons_campaign ON signons(campaign_id);
-			CREATE INDEX IF NOT EXISTS idx_signons_campaign_created ON signons(campaign_id, created_at);
+			CREATE INDEX IF NOT EXISTS idx_signatures_campaign ON signatures(campaign_id);
+			CREATE INDEX IF NOT EXISTS idx_signatures_campaign_created ON signatures(campaign_id, created_at);
 		`,
 	},
 }

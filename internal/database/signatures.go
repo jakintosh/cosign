@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func (db *DB) InsertSignon(
+func (db *DB) InsertSignature(
 	campaignID string,
 	name string,
 	email string,
@@ -14,7 +14,7 @@ func (db *DB) InsertSignon(
 	createdAt int64,
 ) (int64, error) {
 	result, err := db.Conn.Exec(`
-		INSERT INTO signons (campaign_id, name, email, location, created_at)
+		INSERT INTO signatures (campaign_id, name, email, location, created_at)
 		VALUES (?1, ?2, ?3, ?4, ?5)`,
 		campaignID,
 		name,
@@ -23,19 +23,19 @@ func (db *DB) InsertSignon(
 		createdAt,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("insert signon: %w", err)
+		return 0, fmt.Errorf("insert signature: %w", err)
 	}
 	return result.LastInsertId()
 }
 
-func (db *DB) ListSignons(
+func (db *DB) ListSignatures(
 	campaignID string,
 	limit int,
 	offset int,
-) ([]*service.Signon, error) {
+) ([]*service.Signature, error) {
 	rows, err := db.Conn.Query(`
 		SELECT id, name, email, location, created_at
-		FROM signons
+		FROM signatures
 		WHERE campaign_id = ?1
 		ORDER BY created_at DESC
 		LIMIT ?2 OFFSET ?3`,
@@ -44,13 +44,13 @@ func (db *DB) ListSignons(
 		offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list signons: %w", err)
+		return nil, fmt.Errorf("list signatures: %w", err)
 	}
 	defer rows.Close()
 
-	var signons []*service.Signon
+	var signatures []*service.Signature
 	for rows.Next() {
-		var s service.Signon
+		var s service.Signature
 		if err := rows.Scan(
 			&s.ID,
 			&s.Name,
@@ -58,19 +58,19 @@ func (db *DB) ListSignons(
 			&s.Location,
 			&s.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan signon: %w", err)
+			return nil, fmt.Errorf("scan signature: %w", err)
 		}
-		signons = append(signons, &s)
+		signatures = append(signatures, &s)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate signons: %w", err)
+		return nil, fmt.Errorf("iterate signatures: %w", err)
 	}
 
-	return signons, nil
+	return signatures, nil
 }
 
-func (db *DB) CountSignons(
+func (db *DB) CountSignatures(
 	campaignID string,
 ) (
 	int,
@@ -78,45 +78,45 @@ func (db *DB) CountSignons(
 ) {
 	row := db.Conn.QueryRow(`
 		SELECT COUNT(*)
-		FROM signons
+		FROM signatures
 		WHERE campaign_id = ?1`,
 		campaignID,
 	)
 
 	var count int
 	if err := row.Scan(&count); err != nil {
-		return 0, fmt.Errorf("count signons: %w", err)
+		return 0, fmt.Errorf("count signatures: %w", err)
 	}
 	return count, nil
 }
 
-func (db *DB) DeleteSignon(
+func (db *DB) DeleteSignature(
 	campaignID string,
 	id int64,
 ) error {
 	result, err := db.Conn.Exec(`
-		DELETE FROM signons
+		DELETE FROM signatures
 		WHERE campaign_id = ?1 AND id = ?2`,
 		campaignID,
 		id,
 	)
 	if err != nil {
-		return fmt.Errorf("delete signon: %w", err)
+		return fmt.Errorf("delete signature: %w", err)
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("rows affected for signon delete: %w", err)
+		return fmt.Errorf("rows affected for signature delete: %w", err)
 	}
 
 	if rows == 0 {
-		return service.ErrSignonNotFound
+		return service.ErrSignatureNotFound
 	}
 
 	return nil
 }
 
-func (db *DB) SignonEmailExists(
+func (db *DB) SignatureEmailExists(
 	campaignID string,
 	email string,
 ) (
@@ -125,7 +125,7 @@ func (db *DB) SignonEmailExists(
 ) {
 	row := db.Conn.QueryRow(`
 		SELECT COUNT(*)
-		FROM signons
+		FROM signatures
 		WHERE campaign_id = ?1 AND email = ?2`,
 		campaignID,
 		email,
@@ -133,27 +133,27 @@ func (db *DB) SignonEmailExists(
 
 	var count int
 	if err := row.Scan(&count); err != nil {
-		return false, fmt.Errorf("check signon email: %w", err)
+		return false, fmt.Errorf("check signature email: %w", err)
 	}
 	return count > 0, nil
 }
 
-func (db *DB) GetSignon(
+func (db *DB) GetSignature(
 	campaignID string,
 	id int64,
 ) (
-	*service.Signon,
+	*service.Signature,
 	error,
 ) {
 	row := db.Conn.QueryRow(`
 		SELECT id, name, email, location, created_at
-		FROM signons
+		FROM signatures
 		WHERE campaign_id = ?1 AND id = ?2`,
 		campaignID,
 		id,
 	)
 
-	var s service.Signon
+	var s service.Signature
 	if err := row.Scan(
 		&s.ID,
 		&s.Name,
@@ -162,9 +162,9 @@ func (db *DB) GetSignon(
 		&s.CreatedAt,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, service.ErrSignonNotFound
+			return nil, service.ErrSignatureNotFound
 		}
-		return nil, fmt.Errorf("get signon: %w", err)
+		return nil, fmt.Errorf("get signature: %w", err)
 	}
 
 	return &s, nil

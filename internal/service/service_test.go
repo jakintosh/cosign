@@ -67,16 +67,16 @@ func TestCampaignLifecycle(t *testing.T) {
 	deleteResult.ExpectStatus(t, http.StatusNoContent)
 }
 
-func TestSignonPublicCORSValidation(t *testing.T) {
+func TestSignaturePublicCORSValidation(t *testing.T) {
 	svc := testutil.SetupService(t)
 	handler := svc.BuildRouter()
 	campaign := createCampaign(t, handler, "Petition")
 
 	body := `{"name":"Alice","email":"alice@example.com","location":"NYC"}`
 
-	ok := wire.TestPost[service.Signon](
+	ok := wire.TestPost[service.Signature](
 		handler,
-		"/campaigns/"+campaign.ID+"/signons",
+		"/campaigns/"+campaign.ID+"/signatures",
 		body,
 		originHeader("http://test-origin"),
 	)
@@ -85,9 +85,9 @@ func TestSignonPublicCORSValidation(t *testing.T) {
 		t.Fatalf("expected access-control-allow-origin header for allowed origin, got %q", got)
 	}
 
-	notAllowed := wire.TestPost[service.Signon](
+	notAllowed := wire.TestPost[service.Signature](
 		handler,
-		"/campaigns/"+campaign.ID+"/signons",
+		"/campaigns/"+campaign.ID+"/signatures",
 		`{"name":"Bob","email":"bob@example.com","location":"NYC"}`,
 		originHeader("http://blocked-origin"),
 	)
@@ -98,13 +98,13 @@ func TestSignonPublicCORSValidation(t *testing.T) {
 
 	preflightDenied := wire.TestOptions[struct{}](
 		handler,
-		"/campaigns/"+campaign.ID+"/signons",
+		"/campaigns/"+campaign.ID+"/signatures",
 		originHeader("http://blocked-origin"),
 	)
 	preflightDenied.ExpectStatus(t, http.StatusForbidden)
 }
 
-func TestSignonStrictLocationValidation(t *testing.T) {
+func TestSignatureStrictLocationValidation(t *testing.T) {
 	svc := testutil.SetupService(t)
 	handler := svc.BuildRouter()
 	campaign := createCampaign(t, handler, "Strict")
@@ -125,9 +125,9 @@ func TestSignonStrictLocationValidation(t *testing.T) {
 	)
 	setLocs.ExpectStatus(t, http.StatusOK)
 
-	invalid := wire.TestPost[service.Signon](
+	invalid := wire.TestPost[service.Signature](
 		handler,
-		"/campaigns/"+campaign.ID+"/signons",
+		"/campaigns/"+campaign.ID+"/signatures",
 		`{"name":"Bob","email":"bob@example.com","location":"Berlin"}`,
 		originHeader("http://test-origin"),
 	)

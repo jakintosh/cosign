@@ -12,18 +12,18 @@ import (
 	"git.sr.ht/~jakintosh/command-go/pkg/args"
 )
 
-var signonsCmd = &args.Command{
-	Name: "signons",
-	Help: "manage sign-ons",
+var signaturesCmd = &args.Command{
+	Name: "signatures",
+	Help: "manage signatures",
 	Subcommands: []*args.Command{
-		signonsListCmd,
-		signonsExportCmd,
+		signaturesListCmd,
+		signaturesExportCmd,
 	},
 }
 
-var signonsListCmd = &args.Command{
+var signaturesListCmd = &args.Command{
 	Name: "list",
-	Help: "list campaign sign-ons",
+	Help: "list campaign signatures",
 	Options: []args.Option{
 		{
 			Long: "limit",
@@ -57,8 +57,8 @@ var signonsListCmd = &args.Command{
 			return err
 		}
 
-		var response service.Signons
-		path := fmt.Sprintf("/admin/campaigns/%s/signons?limit=%d&offset=%d", id, limit, offset)
+		var response service.Signatures
+		path := fmt.Sprintf("/admin/campaigns/%s/signatures?limit=%d&offset=%d", id, limit, offset)
 		if err := client.Get(path, &response); err != nil {
 			return err
 		}
@@ -67,9 +67,9 @@ var signonsListCmd = &args.Command{
 	},
 }
 
-var signonsExportCmd = &args.Command{
+var signaturesExportCmd = &args.Command{
 	Name: "export",
-	Help: "export campaign sign-ons to CSV",
+	Help: "export campaign signatures to CSV",
 	Options: []args.Option{
 		{
 			Short: 'o',
@@ -79,7 +79,7 @@ var signonsExportCmd = &args.Command{
 		},
 	},
 	Handler: func(i *args.Input) error {
-		rawOutput := i.GetParameterOr("output", "signons.csv")
+		rawOutput := i.GetParameterOr("output", "signatures.csv")
 
 		id, err := resolveCampaignId(i)
 		if err != nil {
@@ -96,8 +96,8 @@ var signonsExportCmd = &args.Command{
 			return err
 		}
 
-		var response service.Signons
-		if err := client.Get("/admin/campaigns/"+id+"/signons", &response); err != nil {
+		var response service.Signatures
+		if err := client.Get("/admin/campaigns/"+id+"/signatures", &response); err != nil {
 			return err
 		}
 
@@ -113,13 +113,13 @@ var signonsExportCmd = &args.Command{
 			return err
 		}
 
-		for _, signon := range response.Signons {
-			createdAt := time.Unix(signon.CreatedAt, 0).UTC().Format(time.RFC3339)
+		for _, signature := range response.Signatures {
+			createdAt := time.Unix(signature.CreatedAt, 0).UTC().Format(time.RFC3339)
 			row := []string{
-				strconv.FormatInt(signon.ID, 10),
-				signon.Name,
-				signon.Email,
-				signon.Location,
+				strconv.FormatInt(signature.ID, 10),
+				signature.Name,
+				signature.Email,
+				signature.Location,
 				createdAt,
 			}
 			if err := writer.Write(row); err != nil {
@@ -132,7 +132,7 @@ var signonsExportCmd = &args.Command{
 			return err
 		}
 
-		fmt.Printf("exported %d sign-ons to %s\n", len(response.Signons), output)
+		fmt.Printf("exported %d signatures to %s\n", len(response.Signatures), output)
 		return nil
 	},
 }

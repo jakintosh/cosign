@@ -26,7 +26,7 @@ var apiCmd = &args.Command{
 	Help: "API client commands",
 	Subcommands: []*args.Command{
 		campaignCmd,
-		signonsCmd,
+		signaturesCmd,
 		settingsCmd,
 	},
 }

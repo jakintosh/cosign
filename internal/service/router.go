@@ -31,7 +31,7 @@ func (s *Service) buildHealthRouter(mux *http.ServeMux) {
 func (s *Service) buildPublicRouter(mux *http.ServeMux, mw Middleware) {
 	campaignsMux := http.NewServeMux()
 	s.buildPublicCampaignRouter(campaignsMux, mw)
-	s.buildPublicSignonRouter(campaignsMux, mw)
+	s.buildPublicSignatureRouter(campaignsMux, mw)
 
 	mountSubrouter(mux, "/campaigns", campaignsMux)
 }
@@ -47,7 +47,7 @@ func (s *Service) buildAdminRouter(mux *http.ServeMux, mw Middleware) {
 func (s *Service) buildAdminCampaignsRouter(mux *http.ServeMux, mw Middleware) {
 	campaignsMux := http.NewServeMux()
 	s.buildAdminCampaignRouter(campaignsMux, mw)
-	s.buildAdminSignonRouter(campaignsMux, mw)
+	s.buildAdminSignatureRouter(campaignsMux, mw)
 
 	mountSubrouter(mux, "/campaigns", campaignsMux)
 }

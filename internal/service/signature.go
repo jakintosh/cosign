@@ -10,15 +10,15 @@ import (
 	"git.sr.ht/~jakintosh/command-go/pkg/wire"
 )
 
-var signonEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+var signatureEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
-type CreateSignonRequest struct {
+type CreateSignatureRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Location string `json:"location"`
 }
 
-func (s *Service) CreateSignon(campaignID, name, email, location string) (*Signon, error) {
+func (s *Service) CreateSignature(campaignID, name, email, location string) (*Signature, error) {
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
 	location = strings.TrimSpace(location)
@@ -33,11 +33,11 @@ func (s *Service) CreateSignon(campaignID, name, email, location string) (*Signo
 		return nil, ErrEmptyLocation
 	}
 
-	if !signonEmailRegex.MatchString(email) {
+	if !signatureEmailRegex.MatchString(email) {
 		return nil, ErrInvalidEmail
 	}
 
-	exists, err := s.store.SignonEmailExists(campaignID, email)
+	exists, err := s.store.SignatureEmailExists(campaignID, email)
 	if err != nil {
 		return nil, DatabaseError{Err: err}
 	}
@@ -45,17 +45,17 @@ func (s *Service) CreateSignon(campaignID, name, email, location string) (*Signo
 		return nil, ErrDuplicateEmail
 	}
 
-	if err := s.validateSignonLocation(campaignID, location); err != nil {
+	if err := s.validateSignatureLocation(campaignID, location); err != nil {
 		return nil, err
 	}
 
 	createdAt := s.clock().Unix()
-	id, err := s.store.InsertSignon(campaignID, name, email, location, createdAt)
+	id, err := s.store.InsertSignature(campaignID, name, email, location, createdAt)
 	if err != nil {
 		return nil, DatabaseError{Err: err}
 	}
 
-	return &Signon{
+	return &Signature{
 		ID:        id,
 		Name:      name,
 		Email:     email,
@@ -64,18 +64,18 @@ func (s *Service) CreateSignon(campaignID, name, email, location string) (*Signo
 	}, nil
 }
 
-func (s *Service) GetSignon(campaignID string, id int64) (*Signon, error) {
-	signon, err := s.store.GetSignon(campaignID, id)
+func (s *Service) GetSignature(campaignID string, id int64) (*Signature, error) {
+	signature, err := s.store.GetSignature(campaignID, id)
 	if err != nil {
-		if errors.Is(err, ErrSignonNotFound) {
+		if errors.Is(err, ErrSignatureNotFound) {
 			return nil, err
 		}
 		return nil, DatabaseError{Err: err}
 	}
-	return signon, nil
+	return signature, nil
 }
 
-func (s *Service) ListSignons(campaignID string, limit, offset int) (*Signons, error) {
+func (s *Service) ListSignatures(campaignID string, limit, offset int) (*Signatures, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -83,28 +83,28 @@ func (s *Service) ListSignons(campaignID string, limit, offset int) (*Signons, e
 		offset = 0
 	}
 
-	list, err := s.store.ListSignons(campaignID, limit, offset)
+	list, err := s.store.ListSignatures(campaignID, limit, offset)
 	if err != nil {
 		return nil, DatabaseError{Err: err}
 	}
 
-	total, err := s.store.CountSignons(campaignID)
+	total, err := s.store.CountSignatures(campaignID)
 	if err != nil {
 		return nil, DatabaseError{Err: err}
 	}
 
-	return &Signons{
-		Signons: list,
-		Total:   total,
-		Limit:   limit,
-		Offset:  offset,
+	return &Signatures{
+		Signatures: list,
+		Total:      total,
+		Limit:      limit,
+		Offset:     offset,
 	}, nil
 }
 
-func (s *Service) DeleteSignon(campaignID string, id int64) error {
-	err := s.store.DeleteSignon(campaignID, id)
+func (s *Service) DeleteSignature(campaignID string, id int64) error {
+	err := s.store.DeleteSignature(campaignID, id)
 	if err != nil {
-		if errors.Is(err, ErrSignonNotFound) {
+		if errors.Is(err, ErrSignatureNotFound) {
 			return err
 		}
 		return DatabaseError{Err: err}
@@ -113,7 +113,7 @@ func (s *Service) DeleteSignon(campaignID string, id int64) error {
 	return nil
 }
 
-func (s *Service) validateSignonLocation(campaignID, location string) error {
+func (s *Service) validateSignatureLocation(campaignID, location string) error {
 	campaign, err := s.GetCampaign(campaignID)
 	if err != nil {
 		if errors.Is(err, ErrCampaignNotFound) {
@@ -144,31 +144,31 @@ func (s *Service) validateSignonLocation(campaignID, location string) error {
 	return ErrLocationNotInOptions
 }
 
-func (s *Service) buildPublicSignonRouter(mux *http.ServeMux, mw Middleware) {
-	mux.HandleFunc("GET /{campaign_id}/signons", mw.cors(s.handleListSignons))
-	mux.HandleFunc("OPTIONS /{campaign_id}/signons", mw.cors(s.handleCreateSignon))
-	mux.HandleFunc("POST /{campaign_id}/signons", mw.cors(mw.rateLimit(s.handleCreateSignon)))
+func (s *Service) buildPublicSignatureRouter(mux *http.ServeMux, mw Middleware) {
+	mux.HandleFunc("GET /{campaign_id}/signatures", mw.cors(s.handleListSignatures))
+	mux.HandleFunc("OPTIONS /{campaign_id}/signatures", mw.cors(s.handleCreateSignature))
+	mux.HandleFunc("POST /{campaign_id}/signatures", mw.cors(mw.rateLimit(s.handleCreateSignature)))
 }
 
-func (s *Service) buildAdminSignonRouter(mux *http.ServeMux, _ Middleware) {
-	mux.HandleFunc("GET /{campaign_id}/signons", s.handleListSignons)
-	mux.HandleFunc("DELETE /{campaign_id}/signons/{signon_id}", s.handleDeleteSignon)
+func (s *Service) buildAdminSignatureRouter(mux *http.ServeMux, _ Middleware) {
+	mux.HandleFunc("GET /{campaign_id}/signatures", s.handleListSignatures)
+	mux.HandleFunc("DELETE /{campaign_id}/signatures/{signature_id}", s.handleDeleteSignature)
 }
 
-func (s *Service) handleCreateSignon(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleCreateSignature(w http.ResponseWriter, r *http.Request) {
 	campaignID := campaignIDFromPath(r)
 	if campaignID == "" {
 		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
 		return
 	}
 
-	var req CreateSignonRequest
+	var req CreateSignatureRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		wire.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	signon, err := s.CreateSignon(campaignID, req.Name, req.Email, req.Location)
+	signature, err := s.CreateSignature(campaignID, req.Name, req.Email, req.Location)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrEmptyName), errors.Is(err, ErrEmptyEmail), errors.Is(err, ErrEmptyLocation), errors.Is(err, ErrInvalidEmail), errors.Is(err, ErrLocationNotInOptions):
@@ -178,15 +178,15 @@ func (s *Service) handleCreateSignon(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrDuplicateEmail):
 			wire.WriteError(w, http.StatusConflict, err.Error())
 		default:
-			wire.WriteError(w, http.StatusInternalServerError, "failed to create sign-on")
+			wire.WriteError(w, http.StatusInternalServerError, "failed to create signature")
 		}
 		return
 	}
 
-	wire.WriteData(w, http.StatusCreated, signon)
+	wire.WriteData(w, http.StatusCreated, signature)
 }
 
-func (s *Service) handleListSignons(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleListSignatures(w http.ResponseWriter, r *http.Request) {
 	campaignID := campaignIDFromPath(r)
 	if campaignID == "" {
 		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
@@ -199,34 +199,34 @@ func (s *Service) handleListSignons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signons, err := s.ListSignons(campaignID, limit, offset)
+	signatures, err := s.ListSignatures(campaignID, limit, offset)
 	if err != nil {
-		wire.WriteError(w, http.StatusInternalServerError, "failed to list sign-ons")
+		wire.WriteError(w, http.StatusInternalServerError, "failed to list signatures")
 		return
 	}
 
-	wire.WriteData(w, http.StatusOK, signons)
+	wire.WriteData(w, http.StatusOK, signatures)
 }
 
-func (s *Service) handleDeleteSignon(w http.ResponseWriter, r *http.Request) {
+func (s *Service) handleDeleteSignature(w http.ResponseWriter, r *http.Request) {
 	campaignID := campaignIDFromPath(r)
 	if campaignID == "" {
 		wire.WriteError(w, http.StatusBadRequest, "campaign id required")
 		return
 	}
 
-	signonID, err := signonIDFromPath(r)
+	signatureID, err := signatureIDFromPath(r)
 	if err != nil {
-		wire.WriteError(w, http.StatusBadRequest, "invalid sign-on id")
+		wire.WriteError(w, http.StatusBadRequest, "invalid signature id")
 		return
 	}
 
-	if err := s.DeleteSignon(campaignID, signonID); err != nil {
+	if err := s.DeleteSignature(campaignID, signatureID); err != nil {
 		switch {
-		case errors.Is(err, ErrSignonNotFound):
-			wire.WriteError(w, http.StatusNotFound, "sign-on not found")
+		case errors.Is(err, ErrSignatureNotFound):
+			wire.WriteError(w, http.StatusNotFound, "signature not found")
 		default:
-			wire.WriteError(w, http.StatusInternalServerError, "failed to delete sign-on")
+			wire.WriteError(w, http.StatusInternalServerError, "failed to delete signature")
 		}
 		return
 	}
