@@ -32,6 +32,7 @@ var root = &args.Command{
 	},
 	Subcommands: []*args.Command{
 		serveCmd,
+		dashboardCmd,
 		apiCmd,
 		envs.Command(DEFAULT_CFG),
 		statusCmd,

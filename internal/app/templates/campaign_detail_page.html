@@ -1,0 +1,207 @@
+{{define "campaign_detail_page"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campaign - Cosign Admin</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/campaigns">Cosign Admin</a>
+  </header>
+  <main class="page-shell page-shell-detail">
+    <section class="panel panel-toolbar">
+      <div class="toolbar">
+        <a class="button button-link" href="/campaigns">Back to all campaigns</a>
+      </div>
+    </section>
+    {{template "campaign_panel" .Campaign}}
+    {{template "locations_panel" .Locations}}
+    {{template "signatures_panel" .Signatures}}
+  </main>
+</body>
+</html>
+{{end}}
+
+{{define "locations_panel"}}
+<section id="locations-panel" class="panel">
+  <h2 class="panel-title">Preset Locations</h2>
+  <form class="form-row" method="post" action="{{.UpdateSettingsPath}}" hx-patch="{{.UpdateSettingsPath}}" hx-target="#locations-panel" hx-swap="outerHTML">
+    <input type="hidden" name="_method" value="PATCH">
+    <label class="checkbox-row">
+      <input type="checkbox" name="allow_custom_text" {{if .AllowCustomText}}checked{{end}}>
+      Allow custom signature location text
+    </label>
+    <button class="button" type="submit">Update Rule</button>
+  </form>
+  <p class="muted">
+    {{if .AllowCustomText}}
+      Custom locations are currently allowed. Presets are still available in the signer form.
+    {{else}}
+      Custom locations are currently disabled. Signatures must use a preset when this list is not empty.
+    {{end}}
+  </p>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  {{if .FormError}}<p class="error">{{.FormError}}</p>{{end}}
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Location</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{if .Rows}}
+        {{range .Rows}}
+        <tr>
+          <td>
+            {{if .IsEditing}}
+              <form class="form-row" method="post" action="{{.UpdatePath}}" hx-patch="{{.UpdatePath}}" hx-target="#locations-panel" hx-swap="outerHTML">
+                <input type="hidden" name="_method" value="PATCH">
+                <input class="input" type="text" name="value" value="{{.EditValue}}" required>
+                <button class="button" type="submit">Save</button>
+              </form>
+            {{else}}
+              {{.Value}}
+            {{end}}
+          </td>
+          <td>
+            <div class="actions">
+              {{if .IsEditing}}
+                <a class="button button-link" href="{{.CancelPath}}" hx-get="{{.CancelPath}}" hx-target="#locations-panel" hx-swap="outerHTML">Cancel</a>
+              {{else}}
+                <a class="button button-link" href="{{.EditPath}}" hx-get="{{.EditPath}}" hx-target="#locations-panel" hx-swap="outerHTML">Edit</a>
+                <form method="post" action="{{.DeletePath}}" hx-delete="{{.DeletePath}}" hx-target="#locations-panel" hx-swap="outerHTML" hx-confirm="Delete this location?">
+                  <input type="hidden" name="_method" value="DELETE">
+                  <button class="button button-danger" type="submit">Delete</button>
+                </form>
+              {{end}}
+            </div>
+          </td>
+        </tr>
+        {{end}}
+      {{else if not .NewMode}}
+        <tr><td colspan="2">No preset locations yet.</td></tr>
+      {{end}}
+
+      {{if .NewMode}}
+      <tr>
+        <td>
+          <form class="form-row" method="post" action="{{.CreatePath}}" hx-post="{{.CreatePath}}" hx-target="#locations-panel" hx-swap="outerHTML">
+            <input class="input" type="text" name="value" value="{{.NewValue}}" placeholder="New location" required>
+            <button class="button" type="submit">Add</button>
+          </form>
+        </td>
+        <td>
+          <a class="button button-link" href="{{.CancelNewPath}}" hx-get="{{.CancelNewPath}}" hx-target="#locations-panel" hx-swap="outerHTML">Cancel</a>
+        </td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  {{if not .NewMode}}
+    <div class="panel-actions">
+      <a class="button" href="{{.NewPath}}" hx-get="{{.NewPath}}" hx-target="#locations-panel" hx-swap="outerHTML">New Location</a>
+    </div>
+  {{end}}
+</section>
+{{end}}
+
+{{define "campaign_panel"}}
+<section id="campaign-panel" class="panel">
+  <h1 class="panel-title">Campaign Details</h1>
+  {{if .FormError}}<p class="error">{{.FormError}}</p>{{end}}
+  <div class="meta-grid">
+    <div><strong>ID</strong><span class="mono">{{.ID}}</span></div>
+    <div><strong>Created</strong><span class="mono">{{.CreatedAt}}</span></div>
+  </div>
+
+  <form id="campaign-update-form" class="form-stack" method="post" action="{{.UpdatePath}}" hx-patch="{{.UpdatePath}}" hx-target="#campaign-panel" hx-swap="outerHTML">
+    <input type="hidden" name="_method" value="PATCH">
+    <label>Name</label>
+    <input class="input" type="text" name="name" value="{{.Name}}" required>
+  </form>
+
+  <div class="toolbar campaign-toolbar">
+    <button class="button button-small" type="submit" form="campaign-update-form">Save Campaign</button>
+    <form class="inline-form" method="post" action="{{.DeletePath}}" onsubmit="return confirm('Delete this campaign and all signatures?');">
+      <input type="hidden" name="_method" value="DELETE">
+      <button class="button button-danger button-small" type="submit">Delete Campaign</button>
+    </form>
+  </div>
+</section>
+{{end}}
+
+{{define "signatures_panel"}}
+<section id="signatures-panel" class="panel">
+  <h2 class="panel-title">Signatures</h2>
+  <form class="form-grid" method="post" action="{{.CreatePath}}" hx-post="{{.CreatePath}}" hx-target="#signatures-panel" hx-swap="outerHTML">
+    <input class="input" type="text" name="name" value="{{.Name}}" placeholder="Signer name" required>
+    <input class="input" type="email" name="email" value="{{.Email}}" placeholder="Signer email" required>
+    <input class="input" type="text" name="location" value="{{.Location}}" placeholder="Location" required>
+    <button class="button" type="submit">Add Signature</button>
+  </form>
+  {{if .FormError}}<p class="error">{{.FormError}}</p>{{end}}
+  {{template "signatures_table" .Table}}
+</section>
+{{end}}
+
+{{define "signatures_table"}}
+{{if .Error}}
+  <p class="error">{{.Error}}</p>
+{{else}}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Location</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{if .Signatures}}
+        {{range .Signatures}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{.Email}}</td>
+          <td>{{.Location}}</td>
+          <td><span class="mono">{{.CreatedAt}}</span></td>
+          <td>
+            <form method="post" action="{{.DeletePath}}?page={{$.CurrentPage}}" hx-delete="{{.DeletePath}}?page={{$.CurrentPage}}" hx-target="#signatures-panel" hx-swap="outerHTML" hx-confirm="Delete this signature?">
+              <input type="hidden" name="_method" value="DELETE">
+              <button class="button button-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+      {{else}}
+        <tr><td colspan="5">No signatures yet.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+  <nav class="pager">
+    {{if .Pagination.HasPrev}}
+      <a href="{{.PrevPagePath}}" hx-get="{{.PrevPagePath}}" hx-target="#signatures-panel" hx-swap="outerHTML">Previous</a>
+    {{else}}
+      <span class="pager-disabled">Previous</span>
+    {{end}}
+    <span>Page {{.Pagination.Page}}{{if gt .Pagination.TotalPages 0}} of {{.Pagination.TotalPages}}{{end}}</span>
+    {{if .Pagination.HasNext}}
+      <a href="{{.NextPagePath}}" hx-get="{{.NextPagePath}}" hx-target="#signatures-panel" hx-swap="outerHTML">Next</a>
+    {{else}}
+      <span class="pager-disabled">Next</span>
+    {{end}}
+  </nav>
+{{end}}
+{{end}}

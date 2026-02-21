@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := build
 
-.PHONY: generate build run init test install clean
+.PHONY: generate build run run-dashboard init test install clean
 
 generate:
 	go generate ./cmd/cosign
@@ -12,6 +12,16 @@ build:
 run: build
 	mkdir -p ./data
 	./bin/cosign serve --db-path ./data/cosign.db --credentials-directory ./secrets/
+
+run-dashboard: build
+	mkdir -p ./data
+	@set -e; \
+		./bin/cosign serve --db-path ./data/cosign.db --credentials-directory ./secrets/ & \
+		api_pid=$$!; \
+		./bin/cosign dashboard --api-base-url http://localhost:8080 --credentials-directory ./secrets/ & \
+		dashboard_pid=$$!; \
+		trap 'kill $$api_pid $$dashboard_pid 2>/dev/null || true; wait $$api_pid $$dashboard_pid 2>/dev/null || true' INT TERM EXIT; \
+		wait $$api_pid $$dashboard_pid
 
 init: build
 	mkdir -p ./secrets

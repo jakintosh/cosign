@@ -1,0 +1,240 @@
+:root {
+  --bg: #f7f8f4;
+  --panel: #ffffff;
+  --text: #1f2a2b;
+  --muted: #556668;
+  --line: #d8dfd5;
+  --brand: #1f5f55;
+  --danger: #9c2f2f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: radial-gradient(circle at top right, #eef4ec 0%, var(--bg) 55%);
+  font: 16px/1.45 "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--line);
+  background: #fbfcf9cc;
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+}
+
+.brand {
+  display: inline-block;
+  padding: 0.9rem 1.25rem;
+  text-decoration: none;
+  color: var(--brand);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.page-shell {
+  width: min(1080px, calc(100% - 2rem));
+  margin: 1.25rem auto 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.page-shell-detail {
+  grid-template-columns: 1fr;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.panel-toolbar {
+  padding: 0.75rem 1rem;
+}
+
+.panel-title {
+  margin: 0 0 0.9rem;
+  font-size: 1.12rem;
+}
+
+.form-row,
+.form-grid,
+.form-stack {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.form-row {
+  grid-template-columns: 1fr auto;
+}
+
+.form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.input {
+  width: 100%;
+  padding: 0.52rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  line-height: 1.2;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button-small {
+  padding: 0.38rem 0.62rem;
+  font-size: 0.92rem;
+}
+
+.button-link {
+  display: inline-block;
+}
+
+.button-danger {
+  background: #fff;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table-wrap form {
+  margin: 0;
+}
+
+.table-wrap .form-row {
+  margin-bottom: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  padding: 0.52rem 0.4rem;
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.campaign-toolbar {
+  margin-top: 0.8rem;
+}
+
+.inline-form {
+  margin: 0;
+}
+
+.panel-actions {
+  margin-top: 0.85rem;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.65rem;
+  color: var(--muted);
+}
+
+.pager a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.pager-disabled {
+  color: #9ea9a6;
+}
+
+.error {
+  margin: 0.45rem 0;
+  color: var(--danger);
+}
+
+.muted {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.mono {
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.92rem;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.meta-grid div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+@media (max-width: 820px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+}

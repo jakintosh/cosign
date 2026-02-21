@@ -1,0 +1,90 @@
+{{define "campaigns_page"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cosign Admin</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/campaigns">Cosign Admin</a>
+  </header>
+  <main class="page-shell">
+    <section id="campaigns-region">
+      {{template "campaigns_region" .Campaigns}}
+    </section>
+  </main>
+</body>
+</html>
+{{end}}
+
+{{define "campaigns_region"}}
+<section class="panel">
+  <h1 class="panel-title">Campaigns</h1>
+  <form class="form-row" method="post" action="{{.CreatePath}}" hx-post="{{.CreatePath}}" hx-target="#campaigns-region" hx-swap="outerHTML">
+    <input type="hidden" name="page" value="{{.Table.CurrentPage}}">
+    <input class="input" type="text" name="name" value="{{.Name}}" placeholder="Campaign name" required>
+    <button class="button" type="submit">Create Campaign</button>
+  </form>
+  {{if .FormError}}<p class="error">{{.FormError}}</p>{{end}}
+  {{template "campaigns_table" .Table}}
+</section>
+{{end}}
+
+{{define "campaigns_table"}}
+{{if .Error}}
+  <p class="error">{{.Error}}</p>
+{{else}}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Custom Locations</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{if .Campaigns}}
+        {{range .Campaigns}}
+        <tr>
+          <td><a href="{{.DetailPath}}">{{.Name}}</a></td>
+          <td>{{if .AllowCustomText}}yes{{else}}no{{end}}</td>
+          <td><span class="mono">{{.CreatedAt}}</span></td>
+          <td>
+            <div class="actions">
+              <a class="button button-link" href="{{.DetailPath}}">View</a>
+              <form method="post" action="{{.DeletePath}}?page={{$.CurrentPage}}" hx-delete="{{.DeletePath}}?page={{$.CurrentPage}}" hx-target="#campaigns-region" hx-swap="outerHTML" onsubmit="return confirm('Delete campaign and all signatures?');">
+                <input type="hidden" name="_method" value="DELETE">
+                <button class="button button-danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {{end}}
+      {{else}}
+        <tr><td colspan="4">No campaigns yet.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <nav class="pager">
+    {{if .Pagination.HasPrev}}
+      <a href="{{.PrevPagePath}}" hx-get="{{.PrevPagePath}}" hx-target="#campaigns-region" hx-swap="outerHTML">Previous</a>
+    {{else}}
+      <span class="pager-disabled">Previous</span>
+    {{end}}
+    <span>Page {{.Pagination.Page}}{{if gt .Pagination.TotalPages 0}} of {{.Pagination.TotalPages}}{{end}}</span>
+    {{if .Pagination.HasNext}}
+      <a href="{{.NextPagePath}}" hx-get="{{.NextPagePath}}" hx-target="#campaigns-region" hx-swap="outerHTML">Next</a>
+    {{else}}
+      <span class="pager-disabled">Next</span>
+    {{end}}
+  </nav>
+{{end}}
+{{end}}

@@ -4,7 +4,9 @@ Cosign is a small Go service and CLI for managing public signature campaigns.
 
 It follows the Pollinator style architecture:
 
-- `CLI -> service -> database`
+- `CLI -> service -> database` for API and automation workflows
+- `dashboard -> service API -> database` for admin UI workflows
+- `internal/app` owns the server-rendered admin dashboard and UI handlers
 - `internal/service` owns business logic and HTTP handlers
 - `internal/database` owns SQLite access and migrations
 - `command-go` packages provide CLI parsing, envelope I/O, API keys, and CORS
@@ -14,6 +16,26 @@ It follows the Pollinator style architecture:
 ```bash
 make build
 make test
+```
+
+## Quick Start (Local)
+
+Initialize local credentials:
+
+```bash
+make init
+```
+
+Run API only:
+
+```bash
+make run
+```
+
+Run API + dashboard together:
+
+```bash
+make run-dashboard
 ```
 
 ## Server
@@ -33,6 +55,28 @@ Required credential file:
 
 The bootstrap token is used only when the key store is empty.
 
+## Admin Dashboard
+
+Run the API server and the dashboard in separate processes.
+
+```bash
+cosign dashboard \
+  --port 3000 \
+  --api-base-url http://localhost:8080 \
+  --api-prefix /api/v1 \
+  --credentials-directory ./secrets
+```
+
+Dashboard defaults:
+
+- port: `3000`
+- API base URL: `http://localhost:8080`
+- API prefix: `/api/v1`
+- credentials directory: `./secrets`
+- API key file: `api_key`
+
+The dashboard server reads `./secrets/api_key` and uses it as a trusted server key when calling admin API routes.
+
 ## API Prefix
 
 All routes are mounted at `/api/v1`.
@@ -41,11 +85,16 @@ All routes are mounted at `/api/v1`.
 
 - `GET /health`
 - `GET /campaigns/{campaign_id}`
+- `OPTIONS /campaigns/{campaign_id}`
 - `GET /campaigns/{campaign_id}/locations`
+- `OPTIONS /campaigns/{campaign_id}/locations`
 - `GET /campaigns/{campaign_id}/signatures`
 - `POST /campaigns/{campaign_id}/signatures`
+- `OPTIONS /campaigns/{campaign_id}/signatures`
 
-Public campaign routes enforce CORS whitelist checks.
+Public campaign/signature routes enforce CORS whitelist checks.
+
+`POST /campaigns/{campaign_id}/signatures` is IP rate-limited.
 
 ### Admin Routes (API Key Required)
 
@@ -73,6 +122,7 @@ Managed by `command-go` packages:
 Root command includes:
 
 - `serve`
+- `dashboard`
 - `api`
 - `env`
 - `status`
